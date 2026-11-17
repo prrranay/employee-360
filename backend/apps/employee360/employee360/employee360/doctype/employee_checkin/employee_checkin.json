@@ -1,0 +1,150 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "creation": "2026-11-17 19:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "employee",
+    "time",
+    "log_type",
+    "source",
+    "source_record_id",
+    "ip_address",
+    "latitude",
+    "longitude",
+    "gps_accuracy",
+    "device_info"
+  ],
+  "fields": [
+    {
+      "fieldname": "employee",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Employee",
+      "options": "Employee",
+      "reqd": 1
+    },
+    {
+      "fieldname": "time",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Timestamp",
+      "reqd": 1
+    },
+    {
+      "fieldname": "log_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Log Type",
+      "options": "IN\nOUT",
+      "reqd": 1
+    },
+    {
+      "default": "Web",
+      "fieldname": "source",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Source",
+      "options": "Web\nMobile\nSeed\nAdmin Correction",
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_record_id",
+      "fieldtype": "Data",
+      "label": "Source Record ID"
+    },
+    {
+      "fieldname": "ip_address",
+      "fieldtype": "Data",
+      "label": "IP Address"
+    },
+    {
+      "fieldname": "latitude",
+      "fieldtype": "Float",
+      "label": "Latitude"
+    },
+    {
+      "fieldname": "longitude",
+      "fieldtype": "Float",
+      "label": "Longitude"
+    },
+    {
+      "fieldname": "gps_accuracy",
+      "fieldtype": "Float",
+      "label": "GPS Accuracy"
+    },
+    {
+      "fieldname": "device_info",
+      "fieldtype": "Small Text",
+      "label": "Device Information"
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-11-17 19:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Employee360",
+  "name": "Employee Checkin",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "CEO",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Manager",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 1,
+      "delete": 0,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "Employee",
+      "share": 0,
+      "write": 0
+    }
+  ],
+  "sort_field": "time",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}
+

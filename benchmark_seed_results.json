@@ -1,0 +1,42 @@
+{
+  "emp_generation": {
+    "count": 30000,
+    "duration_s": 0.739,
+    "rate_per_sec": 40618.7,
+    "peak_mem_mb": 5.49
+  },
+  "activity_log_streaming": {
+    "streamed_sample": 100000,
+    "duration_s": 2.078,
+    "rate_per_sec": 48128.3
+  },
+  "batch_size_impact": [
+    {
+      "batch_size": 500,
+      "time_s": 0.053,
+      "rate_rows_sec": 9423.7
+    },
+    {
+      "batch_size": 2000,
+      "time_s": 0.06,
+      "rate_rows_sec": 33540.4
+    },
+    {
+      "batch_size": 5000,
+      "time_s": 0.087,
+      "rate_rows_sec": 57797.4
+    },
+    {
+      "batch_size": 10000,
+      "time_s": 0.117,
+      "rate_rows_sec": 85212.9
+    }
+  ],
+  "storage_growth": {
+    "rows": 10950000,
+    "data_mb": 1419.0,
+    "index_mb": 2133.94,
+    "total_mb": 3552.94,
+    "bytes_per_row": 340.2
+  }
+}

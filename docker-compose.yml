@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: employee360_db
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-file-per-table=1
+      - --innodb-buffer-pool-size=1G
+      - --innodb-log-file-size=256M
+      - --innodb-flush-log-at-trx-commit=2
+      - --skip-log-bin
+      - --max-connections=200
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: employee360
+      MYSQL_USER: employee360
+      MYSQL_PASSWORD: employee360_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:latest
+    container_name: employee360_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  mariadb_data:
+

@@ -1,0 +1,127 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:shift_name",
+  "creation": "2026-11-17 19:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "shift_name",
+    "start_time",
+    "end_time",
+    "grace_period_mins",
+    "expected_working_hours",
+    "weekly_off_days",
+    "applicable_departments"
+  ],
+  "fields": [
+    {
+      "fieldname": "shift_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Shift Name",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "start_time",
+      "fieldtype": "Time",
+      "in_list_view": 1,
+      "label": "Start Time",
+      "reqd": 1
+    },
+    {
+      "fieldname": "end_time",
+      "fieldtype": "Time",
+      "in_list_view": 1,
+      "label": "End Time",
+      "reqd": 1
+    },
+    {
+      "default": "15",
+      "fieldname": "grace_period_mins",
+      "fieldtype": "Int",
+      "label": "Grace Period (Minutes)"
+    },
+    {
+      "default": "8.0",
+      "fieldname": "expected_working_hours",
+      "fieldtype": "Float",
+      "label": "Expected Working Hours"
+    },
+    {
+      "default": "Saturday, Sunday",
+      "fieldname": "weekly_off_days",
+      "fieldtype": "Small Text",
+      "label": "Weekly Off Days"
+    },
+    {
+      "fieldname": "applicable_departments",
+      "fieldtype": "Small Text",
+      "label": "Applicable Departments"
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "modified": "2026-11-17 19:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Employee360",
+  "name": "Shift",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "CEO",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "Manager",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "Employee",
+      "share": 0,
+      "write": 0
+    }
+  ],
+  "sort_field": "shift_name",
+  "sort_order": "ASC",
+  "states": [],
+  "track_changes": 1
+}
+
