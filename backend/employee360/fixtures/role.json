@@ -1,0 +1,21 @@
+[
+  {
+    "doctype": "Role",
+    "name": "CEO",
+    "role_name": "CEO",
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Manager",
+    "role_name": "Manager",
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Employee",
+    "role_name": "Employee",
+    "disabled": 0
+  }
+]
+

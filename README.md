@@ -1,6 +1,6 @@
 # Employee360 — Enterprise Attendance & Workforce Analytics Platform
 
-> **Employee360** is a high-performance workforce management and attendance analytics system built on **Frappe Framework**, **Python**, **MariaDB**, **FastAPI**, **Redis**, and **React 18 (Vite + TypeScript + Tailwind CSS)**.
+> **Employee360** is a high-performance workforce management and attendance analytics system built on **genuine Frappe Framework**, **Python**, **MariaDB**, **Redis**, and **React 18 (Vite + TypeScript + Tailwind CSS)**.
 > Engineered and verified against an enterprise target scale of **30,000 active employees** and **10,950,000 historical Employee Activity Log records** spanning 365 days.
 
 ---
@@ -42,8 +42,8 @@ Employee360 solves enterprise-scale time, attendance, and workforce productivity
 | **Frontend** | React 18, Vite 5, TypeScript 5, Tailwind CSS | Single-page application, interactive dashboards, type safety, responsive utility styling |
 | **State & Data Fetching** | TanStack Query v5 (React Query), React Hook Form | Cache invalidation, optimistic updates, query deduplication, validated forms |
 | **Visualizations & Icons** | Recharts, Lucide React | KPI trends, department breakdowns, monthly heatmaps, SVG iconography |
-| **Backend & Routing** | Python 3.10+, FastAPI, Uvicorn, Frappe Bridge | Whitelisted Frappe-compatible RPC methods, session middleware, OpenAPI spec |
-| **Database Engine** | MariaDB 10.11 (InnoDB Engine, utf8mb4) | ACID compliance, recursive CTEs, composite B-Tree indexes, multi-row bulk insertions |
+| **Backend Framework** | Frappe Framework (v14/v15), Python 3.10+ | Whitelisted Frappe RPC methods, native session authentication, RBAC, DocType ORM |
+| **Database Engine** | MariaDB 10.6+ (InnoDB Engine, utf8mb4) | ACID compliance, recursive CTEs, composite B-Tree indexes, multi-row bulk insertions |
 | **Caching & Background** | Redis 7, RQ (Redis Queue) | Background worker queue, session storage, executive trend query caching |
 | **Testing Harness** | Python `unittest`, Vitest 1.4, JSDOM, React Testing Library | 67-check integration test suite, frontend component/route testing, data validator |
 
@@ -52,7 +52,7 @@ Employee360 solves enterprise-scale time, attendance, and workforce productivity
 ## 3. System Architecture
 
 ### 3.1 Architecture Overview
-The platform decouples the client-side single-page application from the backend API server. Requests flow through session authentication middleware that enforces server-side role-based access control (RBAC).
+The platform decouples the client-side single-page application from the genuine Frappe Framework backend server. Requests flow through Frappe's native session authentication and RPC mechanism that enforces server-side role-based access control (RBAC).
 
 ```mermaid
 flowchart TD
@@ -62,18 +62,20 @@ flowchart TD
         ROUTER --> TQ["TanStack Query (Cache & Pagination)"]
     end
 
-    subgraph "Application Tier (FastAPI + Frappe Bridge)"
-        TQ -->|HTTP Cookies / sid| API["FastAPI Gateway (Port 8000)"]
-        API --> SESS["Session & Context Middleware"]
-        SESS --> RBAC{"Server-Side RBAC"}
-        RBAC -->|CEO Role| CEO_API["CEO Analytics Controller"]
-        RBAC -->|Manager Role| MGR_API["Manager Team Controller"]
-        RBAC -->|Employee Role| EMP_API["Employee Self-Service Controller"]
+    subgraph "Application Tier (Genuine Frappe Bench)"
+        TQ -->|HTTP Cookies / sid & CSRF| API["Frappe Web Server (Port 8000)"]
+        API --> SESS["Frappe Native Session & Context"]
+        SESS --> RBAC{"Server-Side RBAC (frappe.get_roles)"}
+        RBAC -->|CEO Role| CEO_API["CEO Analytics Controller (@frappe.whitelist)"]
+        RBAC -->|Manager Role| MGR_API["Manager Team Controller (@frappe.whitelist)"]
+        RBAC -->|Employee Role| EMP_API["Employee Self-Service Controller (@frappe.whitelist)"]
+        API --> WORKER["Background Workers (RQ / Redis Queue)"]
+        API --> SCHED["Frappe Scheduler (bench schedule)"]
     end
 
     subgraph "Data & Cache Tier"
-        CEO_API & MGR_API & EMP_API --> CACHE["Redis 7 (Port 6379)"]
-        CEO_API & MGR_API & EMP_API --> DB[("MariaDB 10.11 (Port 3306)\n30,000 Employees\n10,950,000 Activity Logs")]
+        CEO_API & MGR_API & EMP_API & WORKER --> CACHE["Redis 7 (Port 6379)"]
+        CEO_API & MGR_API & EMP_API & WORKER --> DB[("MariaDB 10.6+ (Port 3306)\n30,000 Employees\n10,950,000 Activity Logs")]
     end
 ```
 
@@ -146,9 +148,10 @@ backend/
 │   ├── test_api_security.py
 │   └── test_doctypes.py
 ├── setup.py                                # Python setuptools package specification
-├── requirements.txt                        # Backend dependencies
-├── frappe_runtime.py                       # Standalone Frappe Execution Runtime engine
-└── server.py                               # Local development HTTP/RPC gateway server (Port 8000)
+├── requirements.txt                        # Backend dependencies (frappe>=14.0.0,<15.0.0)
+├── patches.txt                             # Frappe patch discovery declaration
+├── frappe_runtime.py                       # DEPRECATED — Legacy compatibility layer (raises ImportError)
+└── server.py                               # DEPRECATED — Legacy FastAPI dev server (replaced by Bench)
 ```
 
 ### 3.4 Database Schema & Index Design
@@ -225,56 +228,58 @@ erDiagram
 #### Step 1: Start Database & Cache Containers
 From the project root:
 ```bash
-docker compose up -d
+docker compose up -d mariadb redis-cache redis-queue
 ```
 Verify containers are healthy:
-* MariaDB listening on `127.0.0.1:3306` (Database: `employee360`, User: `root`, Password: `root`)
-* Redis listening on `127.0.0.1:6379`
+* MariaDB 10.6 listening on `127.0.0.1:3306`
+* Redis 7 listening on `127.0.0.1:6379`
 
-#### Step 2: Initialize Database Schema
-Run the schema initialization script to create all tables and performance indexes:
+#### Step 2: Initialize Frappe Bench & Install Employee360
+Run the automated setup script inside the Frappe container:
 ```bash
-python -c "import pymysql; conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', password='root', database='employee360'); cur = conn.cursor(); sql = open('backend/employee360/schema.sql').read(); [cur.execute(s) for s in sql.split(';') if s.strip()]; conn.commit(); print('Database schema initialized!')"
+docker compose run --rm frappe bash /home/frappe/frappe-bench/apps/employee360/scripts/frappe_setup.sh
 ```
+This script automatically executes:
+1. Configures `common_site_config.json` with Redis cache & queue connections
+2. Installs `employee360` app into the bench virtual environment via `pip install -e`
+3. Creates the Frappe site via `bench new-site employee360.localhost`
+4. Installs the app onto the site via `bench --site employee360.localhost install-app employee360`
+5. Runs database migrations and patches via `bench --site employee360.localhost migrate`
+6. Loads role fixtures (`CEO`, `Manager`, `Employee`)
 
-#### Step 3: Start the Backend Server
-
-You can run the backend either via the genuine Frappe Docker container service or using the local development server:
-
-##### Option A: Genuine Frappe Bench Docker Container (Recommended)
+#### Step 3: Start the Frappe Services
+Start the full stack (Web server, background workers, scheduler, and frontend):
 ```bash
-# Start MariaDB, Redis, and Frappe backend container
 docker compose up -d
-
-# Inside the Frappe container, install the Employee360 app into the bench environment
-docker exec -it employee360_frappe bash -c "
-  cd /home/frappe/frappe-bench && \
-  ./env/bin/pip install -e apps/employee360
-"
 ```
+Verify all services:
+* Frappe Web Server: `http://localhost:8000`
+* Frontend Dev Server: `http://localhost:5173`
 
-##### Option B: Local Python Development Runtime
+#### Step 4: Native Bench Commands Reference
+
 ```bash
-# Install Python dependencies (including passlib for PBKDF2 password verification)
-pip install fastapi uvicorn pymysql passlib
+# List installed apps
+bench --site employee360.localhost list-apps
 
-# Start backend server on Port 8000
-python backend/server.py
-```
+# Run migrations
+bench --site employee360.localhost migrate
 
-#### Step 4: Install Frontend Dependencies & Start Dev Server
-```bash
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
-```
-Access the application at `http://127.0.0.1:5173`.
+# Start development server
+bench --site employee360.localhost serve --port 8000
 
-#### Step 5: Running Frappe Scheduled Tasks & Background Workers
-Employee360 includes automated scheduler tasks for unclosed session recalculation and exception detection:
-```bash
-# Run unclosed session recalculation task
-python -c "import sys; sys.path.insert(0, 'backend'); import frappe_runtime; frappe_runtime.install_frappe_compat(); from employee360.tasks import recalculate_unclosed_sessions; print(recalculate_unclosed_sessions())"
+# Start background workers
+bench worker --queue short
+bench worker --queue long
+
+# Start scheduler
+bench schedule
+
+# Trigger scheduled tasks manually
+bench --site employee360.localhost execute employee360.tasks.recalculate_unclosed_sessions
+
+# Run synthetic data seeder (10.95M records)
+bench --site employee360.localhost execute employee360.seed.runner.run_seed
 ```
 
 ---

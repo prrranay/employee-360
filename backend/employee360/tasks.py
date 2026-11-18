@@ -1,8 +1,10 @@
 import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import frappe
-from frappe import _
 from frappe.utils import getdate, nowdate, get_datetime, now_datetime
+
+from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
+
 
 def recalculate_unclosed_sessions(target_date: Optional[str] = None, batch_size: int = 1000) -> Dict[str, Any]:
     """
@@ -14,7 +16,7 @@ def recalculate_unclosed_sessions(target_date: Optional[str] = None, batch_size:
     start_dt = datetime.datetime.combine(date_val, datetime.time.min)
     end_dt = datetime.datetime.combine(date_val, datetime.time.max)
 
-    # Find all employees who punched IN on date_val
+    # Find all employees who punched IN on date_val without a matching OUT
     unclosed_employees = frappe.db.sql(
         """
         SELECT c.employee
@@ -29,11 +31,6 @@ def recalculate_unclosed_sessions(target_date: Optional[str] = None, batch_size:
     )
 
     recalculated_count = 0
-    try:
-        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-    except ImportError:
-        from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-
     for row in unclosed_employees:
         emp_id = row["employee"]
         recalculate_daily_summary(emp_id, date_val)
@@ -50,7 +47,7 @@ def recalculate_unclosed_sessions(target_date: Optional[str] = None, batch_size:
     }
 
 
-def detect_attendance_exceptions_for_date(target_date: Optional[Any] = None, batch_size: int = 2000) -> Dict[str, Any]:
+def detect_attendance_exceptions_for_date(target_date=None, batch_size: int = 2000) -> Dict[str, Any]:
     """
     Scans employees for attendance exceptions on target_date in memory-bounded batches.
     Respects Shifts, Grace Periods, Weekly Offs, Holidays, and Approved Leaves.
@@ -173,11 +170,10 @@ def detect_attendance_exceptions_for_date(target_date: Optional[Any] = None, bat
                     existing_set.add((emp_id, exc_type))
                 continue
 
-            status = log.get("attendance_status")
-            total_work = int(log.get("total_work_seconds") or 0)
+            log_status = log.get("attendance_status")
             first_login = log.get("first_login")
 
-            if status == "Missing Check-out":
+            if log_status == "Missing Check-out":
                 exc_type = "Missing Check-out"
                 if (emp_id, exc_type) not in existing_set:
                     desc = "Check-in was recorded but employee did not check out."
@@ -186,7 +182,7 @@ def detect_attendance_exceptions_for_date(target_date: Optional[Any] = None, bat
                     new_exceptions.append((name, emp_id, date_val, exc_type, desc, "Open", manager, now_str, now_str))
                     existing_set.add((emp_id, exc_type))
 
-            elif status == "Late":
+            elif log_status == "Late":
                 exc_type = "Late Arrival"
                 if (emp_id, exc_type) not in existing_set:
                     desc = f"Late arrival at {first_login} exceeding {shift.get('grace_period_mins', 15)}m grace period."
@@ -195,7 +191,7 @@ def detect_attendance_exceptions_for_date(target_date: Optional[Any] = None, bat
                     new_exceptions.append((name, emp_id, date_val, exc_type, desc, "Open", manager, now_str, now_str))
                     existing_set.add((emp_id, exc_type))
 
-            elif status == "Absent":
+            elif log_status == "Absent":
                 exc_type = "Unexcused Absence"
                 if (emp_id, exc_type) not in existing_set:
                     desc = "Employee was absent on a scheduled working day without approved leave."
@@ -230,4 +226,3 @@ def detect_attendance_exceptions_for_date(target_date: Optional[Any] = None, bat
         "scanned_count": scanned_count,
         "exceptions_detected": created_exceptions
     }
-

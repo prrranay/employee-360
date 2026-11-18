@@ -9,6 +9,8 @@ from employee360.api.auth_utils import (
     get_current_employee_id,
     get_session_user_and_roles,
 )
+from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
+
 
 @frappe.whitelist()
 def get_current_employee():
@@ -117,16 +119,14 @@ def get_employee_activity(
 
     where_clause = " AND ".join(conditions)
 
-    # Total count for pagination
     count_query = f"SELECT COUNT(*) AS total FROM `tabEmployee Activity Log` WHERE {where_clause}"
     total_records = frappe.db.sql(count_query, values, as_dict=True)[0]["total"]
 
-    # Paginated data
     values["limit"] = page_size
     values["offset"] = offset
 
     data_query = f"""
-    SELECT 
+    SELECT
         name,
         employee,
         activity_date,
@@ -162,7 +162,6 @@ def get_employee_attendance_summary(
     """
     Calculates aggregate metrics for an employee over a date range.
     Uses pure database aggregation.
-    Excludes absent, leave, weekend, and missing-checkout when calculating average work duration.
     """
     if not employee_id:
         frappe.throw(_("Employee ID is required"), frappe.MandatoryError)
@@ -192,14 +191,11 @@ def get_employee_attendance_summary(
         SUM(CASE WHEN attendance_status = 'Weekly Off' THEN 1 ELSE 0 END) AS weekly_off_count,
         SUM(CASE WHEN attendance_status = 'Holiday' THEN 1 ELSE 0 END) AS holiday_count,
         SUM(CASE WHEN attendance_status = 'Missing Check-out' THEN 1 ELSE 0 END) AS missing_checkout_count,
-        -- Average work duration strictly on valid completed work days
-        AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND total_work_seconds > 0 
+        AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND total_work_seconds > 0
                  THEN total_work_seconds ELSE NULL END) AS avg_work_seconds,
-        -- Average first login time
-        SEC_TO_TIME(AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND first_login IS NOT NULL 
+        SEC_TO_TIME(AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND first_login IS NOT NULL
                              THEN TIME_TO_SEC(first_login) ELSE NULL END)) AS avg_first_login,
-        -- Average last logout time
-        SEC_TO_TIME(AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND last_logout IS NOT NULL 
+        SEC_TO_TIME(AVG(CASE WHEN attendance_status IN ('Present', 'Late', 'Half Day') AND last_logout IS NOT NULL
                              THEN TIME_TO_SEC(last_logout) ELSE NULL END)) AS avg_last_logout
     FROM `tabEmployee Activity Log`
     WHERE {where_clause};
@@ -210,7 +206,11 @@ def get_employee_attendance_summary(
     weekly_off = int(res["weekly_off_count"] or 0)
     holiday = int(res["holiday_count"] or 0)
     workable_days = total_days - weekly_off - holiday
-    attended_days = float(res["present_count"] or 0) + float(res["late_count"] or 0) + (float(res["half_day_count"] or 0) * 0.5)
+    attended_days = (
+        float(res["present_count"] or 0)
+        + float(res["late_count"] or 0)
+        + (float(res["half_day_count"] or 0) * 0.5)
+    )
 
     attendance_percentage = 0.0
     if workable_days > 0:
@@ -220,7 +220,6 @@ def get_employee_attendance_summary(
     hours = avg_work_sec // 3600
     minutes = (avg_work_sec % 3600) // 60
 
-    # Monthly projection based on 22 working days
     avg_monthly_sec = int(avg_work_sec * 22)
     m_hours = avg_monthly_sec // 3600
     m_minutes = (avg_monthly_sec % 3600) // 60
@@ -255,9 +254,9 @@ def get_employee_attendance_trend(employee_id: str, days: int = 30):
     assert_can_access_employee(employee_id)
 
     days = min(365, max(7, int(days)))
-    
+
     query = """
-    SELECT 
+    SELECT
         activity_date,
         attendance_status,
         total_work_seconds,
@@ -270,7 +269,7 @@ def get_employee_attendance_trend(employee_id: str, days: int = 30):
     LIMIT %(limit)s;
     """
     records = frappe.db.sql(query, {"employee": employee_id, "limit": days}, as_dict=True)
-    records.reverse()  # Return in chronological order
+    records.reverse()
     return records
 
 
@@ -294,8 +293,8 @@ def get_employee_leave_history(employee_id: str, page: int = 1, page_size: int =
 
     records = frappe.db.sql(
         """
-        SELECT 
-            name, employee, leave_type, from_date, to_date, 
+        SELECT
+            name, employee, leave_type, from_date, to_date,
             reason, status, approver, approval_comments, applied_at, decision_at
         FROM `tabLeave Application`
         WHERE employee = %(employee)s
@@ -317,9 +316,7 @@ def get_employee_leave_history(employee_id: str, page: int = 1, page_size: int =
 
 @frappe.whitelist()
 def get_employee_leave_balance(employee_id: Optional[str] = None):
-    """
-    Returns annual leave allocations, used days, and remaining balances per leave type.
-    """
+    """Returns annual leave allocations, used days, and remaining balances per leave type."""
     user, roles = get_session_user_and_roles()
     current_emp = get_current_employee_id()
     emp_id = employee_id or current_emp
@@ -340,7 +337,7 @@ def get_employee_leave_balance(employee_id: Optional[str] = None):
 
     used_rows = frappe.db.sql(
         """
-        SELECT 
+        SELECT
             leave_type,
             SUM(DATEDIFF(to_date, from_date) + 1) AS used_days
         FROM `tabLeave Application`
@@ -356,7 +353,7 @@ def get_employee_leave_balance(employee_id: Optional[str] = None):
 
     pending_rows = frappe.db.sql(
         """
-        SELECT 
+        SELECT
             leave_type,
             SUM(DATEDIFF(to_date, from_date) + 1) AS pending_days
         FROM `tabLeave Application`
@@ -386,7 +383,7 @@ def get_employee_leave_balance(employee_id: Optional[str] = None):
     return balance_summary
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def apply_leave_application(
     leave_type: str,
     from_date: str,
@@ -394,9 +391,7 @@ def apply_leave_application(
     reason: str,
     employee_id: Optional[str] = None
 ):
-    """
-    Submits a leave application with full validation and overlap prevention.
-    """
+    """Submits a leave application with full validation and overlap prevention."""
     user, roles = get_session_user_and_roles()
     current_emp = get_current_employee_id()
     from employee360.api.auth_utils import is_ceo
@@ -410,13 +405,19 @@ def apply_leave_application(
 
     valid_types = ("Casual Leave", "Sick Leave", "Earned Leave", "Unpaid Leave")
     if leave_type not in valid_types:
-        frappe.throw(_("Invalid leave type '{0}'. Must be one of {1}").format(leave_type, valid_types), frappe.ValidationError)
+        frappe.throw(
+            _("Invalid leave type '{0}'. Must be one of {1}").format(leave_type, valid_types),
+            frappe.ValidationError
+        )
 
     from_dt = frappe.utils.getdate(from_date)
     to_dt = frappe.utils.getdate(to_date)
 
     if to_dt < from_dt:
-        frappe.throw(_("To Date ({0}) cannot be before From Date ({1})").format(to_date, from_date), frappe.ValidationError)
+        frappe.throw(
+            _("To Date ({0}) cannot be before From Date ({1})").format(to_date, from_date),
+            frappe.ValidationError
+        )
 
     overlap = frappe.db.sql(
         """
@@ -433,7 +434,8 @@ def apply_leave_application(
     if overlap:
         frappe.throw(
             _("Overlapping leave application found ({0}) for {1} from {2} to {3} with status '{4}'").format(
-                overlap[0]["name"], overlap[0]["leave_type"], overlap[0]["from_date"], overlap[0]["to_date"], overlap[0]["status"]
+                overlap[0]["name"], overlap[0]["leave_type"],
+                overlap[0]["from_date"], overlap[0]["to_date"], overlap[0]["status"]
             ),
             frappe.DuplicateEntryError
         )
@@ -458,12 +460,11 @@ def apply_leave_application(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def cancel_leave_application(leave_id: str):
     """
     Cancels a leave application.
-    Enforces that only Pending applications (or future approved leaves) can be cancelled,
-    and updates activity logs to restore normal attendance status.
+    Enforces that only Pending applications (or future approved leaves) can be cancelled.
     """
     if not leave_id:
         frappe.throw(_("Leave ID is required"), frappe.MandatoryError)
@@ -493,7 +494,10 @@ def cancel_leave_application(leave_id: str):
 
     today = frappe.utils.getdate(frappe.utils.nowdate())
     if leave_data["status"] == "Approved" and leave_data["from_date"] < today:
-        frappe.throw(_("Cannot cancel an approved leave application that has already commenced"), frappe.ValidationError)
+        frappe.throw(
+            _("Cannot cancel an approved leave application that has already commenced"),
+            frappe.ValidationError
+        )
 
     frappe.db.set_value(
         "Leave Application",
@@ -505,10 +509,6 @@ def cancel_leave_application(leave_id: str):
         }
     )
 
-    try:
-        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-    except ImportError:
-        from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
     curr = frappe.utils.getdate(leave_data["from_date"])
     end = min(today, frappe.utils.getdate(leave_data["to_date"]))
     while curr <= end:

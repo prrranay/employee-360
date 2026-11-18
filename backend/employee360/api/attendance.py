@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional
 import frappe
 from frappe import _
 from frappe.utils import getdate, now_datetime, nowdate, get_datetime
@@ -11,6 +11,7 @@ from employee360.api.auth_utils import (
     is_ceo,
     is_manager
 )
+from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
 
 
 def _parse_time_val(time_val) -> Optional[datetime.time]:
@@ -38,12 +39,15 @@ def _get_active_employee_or_throw():
 
     status = frappe.db.get_value("Employee", emp_id, "employment_status")
     if status != "Active":
-        frappe.throw(_("Employment status is '{0}'. Attendance operations are not permitted.").format(status), frappe.PermissionError)
+        frappe.throw(
+            _("Employment status is '{0}'. Attendance operations are not permitted.").format(status),
+            frappe.PermissionError
+        )
 
     return emp_id
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def check_in(
     device_info: Optional[str] = None,
     latitude: Optional[float] = None,
@@ -64,7 +68,6 @@ def check_in(
         now_time = now_datetime()
         today = now_time.date()
 
-        # Fetch today's punches under lock
         start_dt = datetime.datetime.combine(today, datetime.time.min)
         end_dt = datetime.datetime.combine(today, datetime.time.max)
 
@@ -82,14 +85,12 @@ def check_in(
 
         if punches:
             last_punch = punches[-1]
-            # Prevent double IN
             if last_punch.get("log_type") == "IN":
                 frappe.throw(
                     _("You are already checked in. Please check out before checking in again."),
                     frappe.ValidationError
                 )
-            
-            # Prevent rapid duplicate within 10 seconds
+
             last_punch_time = get_datetime(last_punch.get("time"))
             delta_seconds = abs((now_time - last_punch_time).total_seconds())
             if delta_seconds < 10:
@@ -118,11 +119,10 @@ def check_in(
         frappe.db.rollback()
         raise
 
-    # Recalculate summary and return state
     return get_today_attendance()
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def check_out(
     device_info: Optional[str] = None,
     latitude: Optional[float] = None,
@@ -137,13 +137,11 @@ def check_out(
     emp_id = _get_active_employee_or_throw()
 
     try:
-        # Row-level lock on the Employee record to serialize concurrent punch attempts
         frappe.db.sql("SELECT name FROM `tabEmployee` WHERE name = %s FOR UPDATE;", (emp_id,))
 
         now_time = now_datetime()
         today = now_time.date()
 
-        # Fetch today's punches under lock
         start_dt = datetime.datetime.combine(today, datetime.time.min)
         end_dt = datetime.datetime.combine(today, datetime.time.max)
 
@@ -206,11 +204,6 @@ def get_today_attendance():
         return None
 
     today = getdate(nowdate())
-
-    try:
-        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-    except ImportError:
-        from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
     recalculate_daily_summary(emp_id, today)
 
     log = frappe.db.get_value(
@@ -261,10 +254,7 @@ def get_today_attendance():
     }
 
 
-# ==========================================
-# ATTENDANCE REGULARIZATION & AUDIT TRAIL
-# ==========================================
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def request_attendance_correction(
     activity_date: str,
     exception_type: str = "Missed Check-out",
@@ -292,7 +282,6 @@ def request_attendance_correction(
     if not manager:
         manager = "EMP-00001"  # Route to CEO if no direct manager
 
-    # Fetch original activity log values for audit snapshot
     orig_log = frappe.db.get_value(
         "Employee Activity Log",
         {"employee": emp_id, "activity_date": date_val},
@@ -301,7 +290,6 @@ def request_attendance_correction(
     )
     orig_status = orig_log.get("attendance_status") if orig_log else "Absent"
 
-    # Map exception type to enum
     valid_types = {
         "Missed Check-in": "Missing Check-in",
         "Missing Check-in": "Missing Check-in",
@@ -341,7 +329,7 @@ def request_attendance_correction(
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def approve_attendance_exception(exception_id: str, comments: Optional[str] = None):
     """
     Manager or CEO approval of an attendance regularization request.
@@ -376,7 +364,6 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
     resolved_by = current_emp or user
     resolution_comments = comments or "Approved by Manager"
 
-    # 1. Update Attendance Exception status and audit trail
     frappe.db.set_value(
         "Attendance Exception",
         exception_id,
@@ -388,7 +375,6 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
         }
     )
 
-    # 2. If requested IN/OUT times were provided, create audit correction punches
     activity_date = exc["activity_date"]
     req_status = exc.get("requested_status") or "Present"
 
@@ -432,15 +418,13 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
             out_punch.flags.ignore_permissions = True
             out_punch.insert()
 
-    # 3. Recalculate or regularize the Activity Log record
-    try:
-        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-    except ImportError:
-        from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
     recalculate_daily_summary(target_emp, activity_date)
 
-    # Ensure status matches approved regularization
-    eal_name = frappe.db.get_value("Employee Activity Log", {"employee": target_emp, "activity_date": activity_date}, "name")
+    eal_name = frappe.db.get_value(
+        "Employee Activity Log",
+        {"employee": target_emp, "activity_date": activity_date},
+        "name"
+    )
     if eal_name:
         frappe.db.set_value(
             "Employee Activity Log",
@@ -461,7 +445,7 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reject_attendance_exception(exception_id: str, comments: Optional[str] = None):
     """
     Manager or CEO rejection of an attendance regularization request.

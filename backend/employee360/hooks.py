@@ -4,6 +4,10 @@ app_publisher = "Employee360 Team"
 app_description = "Production-scale Employee360 platform supporting 30,000 employees and 10.95M daily summaries"
 app_email = "admin@employee360.local"
 app_license = "MIT"
+app_version = "1.0.0"
+
+# Required frappe version
+required_apps = []
 
 # Document Events
 doc_events = {
@@ -19,7 +23,7 @@ scheduler_events = {
     ]
 }
 
-# Fixtures for Roles
+# Fixtures: load Role records defined in JSON fixture files
 fixtures = [
     {
         "doctype": "Role",
@@ -27,3 +31,5 @@ fixtures = [
     }
 ]
 
+# Website route rules (none — React SPA handles routing)
+website_route_rules = []

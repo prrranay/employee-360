@@ -13,6 +13,7 @@ from employee360.api.auth_utils import (
     is_manager,
 )
 
+
 def require_manager():
     user, roles = get_session_user_and_roles()
     if not is_manager(roles):
@@ -39,7 +40,7 @@ def get_manager_team(include_indirect: int = 1, manager_id: Optional[str] = None
 
     team_members = frappe.db.sql(
         """
-        SELECT 
+        SELECT
             name,
             employee_id,
             employee_name,
@@ -74,7 +75,7 @@ def get_team_dashboard_summary(
         target_emp = get_current_employee_id()
 
     team_ids = get_manager_team_ids(target_emp, include_indirect=bool(int(include_indirect)))
-    
+
     if not team_ids:
         return {
             "date": str(target_date or nowdate()),
@@ -88,7 +89,7 @@ def get_team_dashboard_summary(
     date_val = getdate(target_date) if target_date else getdate(nowdate())
 
     query = """
-    SELECT 
+    SELECT
         attendance_status,
         COUNT(*) AS count
     FROM `tabEmployee Activity Log`
@@ -153,7 +154,7 @@ def get_team_attendance_trend(
     require_manager()
     current_emp = get_current_employee_id()
     team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
-    
+
     if not team_ids:
         return []
 
@@ -168,7 +169,7 @@ def get_team_attendance_trend(
         start_date = end_date - datetime.timedelta(days=max(7, min(60, int(days))))
 
     query = """
-    SELECT 
+    SELECT
         activity_date,
         SUM(CASE WHEN attendance_status = 'Present' THEN 1 ELSE 0 END) AS present,
         SUM(CASE WHEN attendance_status = 'Late' THEN 1 ELSE 0 END) AS late,
@@ -203,7 +204,7 @@ def get_team_attendance_exceptions(
     require_manager()
     current_emp = get_current_employee_id()
     team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
-    
+
     if not team_ids:
         return {"records": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
 
@@ -230,7 +231,7 @@ def get_team_attendance_exceptions(
     values["offset"] = offset
 
     data_query = f"""
-    SELECT 
+    SELECT
         ae.name,
         ae.employee,
         e.employee_name,
@@ -263,7 +264,7 @@ def get_team_leave_overview(status: Optional[str] = None, page: int = 1, page_si
     require_manager()
     current_emp = get_current_employee_id()
     team_ids = get_manager_team_ids(current_emp, include_indirect=True)
-    
+
     if not team_ids:
         return {"records": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
 
@@ -287,7 +288,7 @@ def get_team_leave_overview(status: Optional[str] = None, page: int = 1, page_si
     values["offset"] = offset
 
     data_query = f"""
-    SELECT 
+    SELECT
         la.name,
         la.employee,
         e.employee_name,
@@ -318,7 +319,7 @@ def get_team_leave_overview(status: Optional[str] = None, page: int = 1, page_si
     }
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def approve_leave_application(leave_id: str, comments: Optional[str] = None):
     """
     Approves a team member's leave application.
@@ -343,15 +344,12 @@ def approve_leave_application(leave_id: str, comments: Optional[str] = None):
     leave_doc.approver = current_emp
     leave_doc.approval_comments = comments or "Approved"
     leave_doc.decision_at = now_datetime()
-    leave_doc.save()
+    leave_doc.save(ignore_permissions=True)
 
     # Recalculate daily attendance summaries so approved dates reflect 'On Leave'
+    from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
     curr = getdate(leave_doc.from_date)
     end = getdate(leave_doc.to_date)
-    try:
-        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-    except ImportError:
-        from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
     while curr <= end:
         recalculate_daily_summary(leave_doc.employee, curr)
         curr += datetime.timedelta(days=1)
@@ -359,7 +357,7 @@ def approve_leave_application(leave_id: str, comments: Optional[str] = None):
     return {"message": "Leave application approved successfully", "leave_id": leave_doc.name, "status": "Approved"}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def reject_leave_application(leave_id: str, comments: Optional[str] = None):
     """
     Rejects a team member's leave application.
@@ -383,7 +381,7 @@ def reject_leave_application(leave_id: str, comments: Optional[str] = None):
     leave_doc.approver = current_emp
     leave_doc.approval_comments = comments or "Rejected"
     leave_doc.decision_at = now_datetime()
-    leave_doc.save()
+    leave_doc.save(ignore_permissions=True)
 
     return {"message": "Leave application rejected", "leave_id": leave_doc.name, "status": "Rejected"}
 
@@ -394,9 +392,7 @@ def get_team_leave_calendar(
     to_date: Optional[str] = None,
     include_indirect: int = 1
 ):
-    """
-    Returns team leave schedule calendar events for the manager's hierarchy.
-    """
+    """Returns team leave schedule calendar events for the manager's hierarchy."""
     require_manager()
     current_emp = get_current_employee_id()
     team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
@@ -415,7 +411,7 @@ def get_team_leave_calendar(
         start_date = getdate(nowdate()) - datetime.timedelta(days=30)
 
     query = """
-    SELECT 
+    SELECT
         la.name,
         la.employee,
         e.employee_name,

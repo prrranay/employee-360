@@ -46,6 +46,8 @@ class TestDocTypes(unittest.TestCase):
         self.meta_patcher = patch("frappe.get_meta", return_value=DummyMeta())
         self.meta_patcher.start()
         self.mock_db = MagicMock()
+        self.mock_db.get_single_value.return_value = "UTC"
+        self.mock_db.get_system_setting.return_value = "UTC"
         frappe.local.db = self.mock_db
         self.orig_db = getattr(frappe, "db", None)
         frappe.db = self.mock_db

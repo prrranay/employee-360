@@ -71,7 +71,8 @@ export const authApi = {
     return apiClient.post('/logout');
   },
   getCurrentUser: async (): Promise<UserProfile> => {
-    return apiClient.get('/employee360.api.auth_utils.get_session_user_and_roles');
+    // Uses the genuine Frappe whitelisted API endpoint
+    return apiClient.get('/employee360.api.auth_utils.get_session_user_and_roles_api');
   }
 };
 

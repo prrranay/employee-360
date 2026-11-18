@@ -1,0 +1,84 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:seed_key",
+  "creation": "2026-11-17 19:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "seed_key",
+    "last_completed_batch",
+    "total_records_inserted",
+    "target_records",
+    "status",
+    "updated_at"
+  ],
+  "fields": [
+    {
+      "fieldname": "seed_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Seed Key",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "last_completed_batch",
+      "fieldtype": "Int",
+      "label": "Last Completed Batch"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_records_inserted",
+      "fieldtype": "Int",
+      "label": "Total Records Inserted"
+    },
+    {
+      "default": "0",
+      "fieldname": "target_records",
+      "fieldtype": "Int",
+      "label": "Target Records"
+    },
+    {
+      "default": "Pending",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Pending\nIn Progress\nCompleted\nFailed"
+    },
+    {
+      "fieldname": "updated_at",
+      "fieldtype": "Datetime",
+      "label": "Updated At"
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "modified": "2026-11-17 19:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Employee360",
+  "name": "Seed Checkpoint",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "System Manager",
+      "share": 0,
+      "write": 1
+    }
+  ],
+  "sort_field": "seed_key",
+  "sort_order": "ASC",
+  "states": [],
+  "track_changes": 0
+}
+

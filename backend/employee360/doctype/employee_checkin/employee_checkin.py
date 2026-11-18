@@ -4,6 +4,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import get_datetime, now_datetime
 
+
 class EmployeeCheckin(Document):
     def validate(self):
         self.validate_employee_reference()
@@ -23,18 +24,31 @@ class EmployeeCheckin(Document):
     def enforce_authorization(self):
         user = frappe.session.user
         roles = frappe.get_roles(user)
-        
-        # System Managers, Admins, and Managers/CEOs or Regularization can create punches on behalf of others
-        if "System Manager" in roles or "Administrator" in roles or "HR Manager" in roles or "CEO" in roles or "Manager" in roles or self.source in ["Regularization", "Admin Correction"]:
+
+        # System Managers, Admins, Managers, CEOs, or Admin Correction sources bypass per-user check
+        if (
+            "System Manager" in roles
+            or "Administrator" in roles
+            or "HR Manager" in roles
+            or "CEO" in roles
+            or "Manager" in roles
+            or self.source in ["Regularization", "Admin Correction", "Seed"]
+        ):
             return
 
         # Regular users can only punch for their own linked Employee profile
         employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
         if not employee:
-            frappe.throw(_("No active Employee profile linked to your user account"), frappe.PermissionError)
+            frappe.throw(
+                _("No active Employee profile linked to your user account"),
+                frappe.PermissionError
+            )
 
         if self.employee and self.employee != employee:
-            frappe.throw(_("Unauthorized: You cannot log attendance for another employee"), frappe.PermissionError)
+            frappe.throw(
+                _("Unauthorized: You cannot log attendance for another employee"),
+                frappe.PermissionError
+            )
 
         self.employee = employee
 
@@ -76,7 +90,7 @@ class EmployeeCheckin(Document):
             )
 
         # Bypass sequential state transition enforcement for administrative corrections
-        if self.source in ["Admin Correction", "Regularization"]:
+        if self.source in ["Admin Correction", "Regularization", "Seed"]:
             return
 
         # Fetch the most recent punch prior to or at this one on the same day
@@ -127,9 +141,5 @@ class EmployeeCheckin(Document):
             return
 
         activity_date = get_datetime(self.time).date()
-        try:
-            from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
-        except ImportError:
-            from employee360.employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
+        from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
         recalculate_daily_summary(self.employee, activity_date)
-

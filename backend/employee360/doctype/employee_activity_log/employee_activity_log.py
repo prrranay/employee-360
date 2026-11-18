@@ -4,6 +4,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import get_datetime, getdate, now_datetime
 
+
 class EmployeeActivityLog(Document):
     def validate(self):
         self.enforce_unique_employee_date()
@@ -80,7 +81,10 @@ def recalculate_daily_summary(employee: str, activity_date):
     )
 
     weekday_name = activity_date.strftime("%A")
-    weekly_off_days = [d.strip() for d in (shift.get("weekly_off_days") or "Saturday, Sunday").split(",")] if shift else ["Saturday", "Sunday"]
+    weekly_off_days = (
+        [d.strip() for d in (shift.get("weekly_off_days") or "Saturday, Sunday").split(",")]
+        if shift else ["Saturday", "Sunday"]
+    )
     is_weekly_off = weekday_name in weekly_off_days
 
     # Initial values
@@ -137,16 +141,22 @@ def recalculate_daily_summary(employee: str, activity_date):
                     shift_start_time = shift_start
                 else:
                     shift_start_time = datetime.time(9, 0)
-                
-                grace_mins = (shift.get("grace_period_mins") if isinstance(shift, dict) else getattr(shift, "grace_period_mins", 15)) or 15
+
+                grace_mins = (
+                    shift.get("grace_period_mins") if isinstance(shift, dict)
+                    else getattr(shift, "grace_period_mins", 15)
+                ) or 15
                 expected_start_dt = datetime.datetime.combine(activity_date, shift_start_time)
                 grace_limit_dt = expected_start_dt + datetime.timedelta(minutes=grace_mins)
                 actual_first_login_dt = datetime.datetime.combine(activity_date, first_login)
-                
+
                 if actual_first_login_dt > grace_limit_dt:
                     is_late = True
 
-            expected_hours = float((shift.get("expected_working_hours") if isinstance(shift, dict) else getattr(shift, "expected_working_hours", 8.0)) or 8.0) if shift else 8.0
+            expected_hours = float(
+                (shift.get("expected_working_hours") if isinstance(shift, dict)
+                 else getattr(shift, "expected_working_hours", 8.0)) or 8.0
+            ) if shift else 8.0
             expected_seconds = expected_hours * 3600
 
             if is_late:
@@ -199,6 +209,6 @@ def recalculate_daily_summary(employee: str, activity_date):
             "calculated_at": calc_time
         })
         doc.flags.ignore_permissions = True
+        doc.flags.ignore_validate = False
         doc.insert()
         return doc.name
-

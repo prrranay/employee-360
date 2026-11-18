@@ -1,62 +1,169 @@
+# Employee360 — Genuine Frappe Framework Docker Compose
+# =========================================================
+# Uses official Frappe v14 Docker images with MariaDB 10.6 and Redis 7.
+# This provides a complete, working Frappe Bench environment with:
+#   - MariaDB 10.6 (supported engine for Frappe v14)
+#   - Redis (Cache & Queue)
+#   - Frappe Web Server (bench serve / Gunicorn on port 8000)
+#   - Frappe Background Workers (short & long queues)
+#   - Frappe Scheduler (cron & scheduled task events)
+#   - React 18 / Vite Development Frontend (port 5173)
+#
+# QUICK START:
+#   1. docker compose up -d mariadb redis-cache redis-queue
+#   2. docker compose run --rm frappe bash /home/frappe/frappe-bench/apps/employee360/scripts/frappe_setup.sh
+#   3. docker compose up -d
+#   4. docker compose exec frappe bench --site employee360.localhost list-apps
+
 services:
+
+  # ─── MariaDB 10.6 ──────────────────────────────────────────────────────────
   mariadb:
-    image: mariadb:10.11
+    image: mariadb:10.6
     container_name: employee360_db
     restart: unless-stopped
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --innodb-file-per-table=1
-      - --innodb-buffer-pool-size=1G
+      - --innodb-buffer-pool-size=512M
       - --innodb-log-file-size=256M
       - --innodb-flush-log-at-trx-commit=2
       - --skip-log-bin
       - --max-connections=200
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: employee360
-      MYSQL_USER: employee360
-      MYSQL_PASSWORD: employee360_password
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-frappe_root_password}
     ports:
       - "3306:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 5s
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "--password=${MARIADB_ROOT_PASSWORD:-frappe_root_password}"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
 
-  redis:
-    image: redis:latest
-    container_name: employee360_redis
+  # ─── Redis (Cache + Queue) ─────────────────────────────────────────────────
+  redis-cache:
+    image: redis:7-alpine
+    container_name: employee360_redis_cache
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    volumes:
+      - redis_cache_data:/data
 
-  frappe-backend:
+  redis-queue:
+    image: redis:7-alpine
+    container_name: employee360_redis_queue
+    restart: unless-stopped
+    volumes:
+      - redis_queue_data:/data
+
+  # ─── Frappe Web Server (Gunicorn / Bench) ──────────────────────────────────
+  frappe:
     image: frappe/erpnext-worker:v14
     container_name: employee360_frappe
     restart: unless-stopped
     depends_on:
       mariadb:
         condition: service_healthy
-      redis:
+      redis-cache:
+        condition: service_started
+      redis-queue:
         condition: service_started
     environment:
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-employee360.localhost}
       - MARIADB_HOST=mariadb
-      - MARIADB_PORT=3306
-      - MARIADB_USER=employee360
-      - MARIADB_PASSWORD=employee360_password
-      - MARIADB_DATABASE=employee360
-      - REDIS_CACHE=redis://redis:6379
-      - REDIS_QUEUE=redis://redis:6379
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD:-frappe_root_password}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin123!}
+      - REDIS_CACHE=redis://redis-cache:6379
+      - REDIS_QUEUE=redis://redis-queue:6379
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/employee360
     volumes:
       - ./backend:/home/frappe/frappe-bench/apps/employee360
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - bench_logs:/home/frappe/frappe-bench/logs
     ports:
       - "8000:8000"
-    working_dir: /home/frappe/frappe-bench
+    working_dir: /home/frappe/frappe-bench/sites
+    command: bench --site ${FRAPPE_SITE_NAME:-employee360.localhost} serve --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/method/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  # ─── Background Worker (Short Queue) ──────────────────────────────────────
+  worker-short:
+    image: frappe/erpnext-worker:v14
+    container_name: employee360_worker_short
+    restart: unless-stopped
+    depends_on:
+      - frappe
+    environment:
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-employee360.localhost}
+      - REDIS_QUEUE=redis://redis-queue:6379
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/employee360
+    volumes:
+      - ./backend:/home/frappe/frappe-bench/apps/employee360
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - bench_logs:/home/frappe/frappe-bench/logs
+    working_dir: /home/frappe/frappe-bench/sites
+    command: bench worker --queue short
+
+  # ─── Background Worker (Long Queue) ───────────────────────────────────────
+  worker-long:
+    image: frappe/erpnext-worker:v14
+    container_name: employee360_worker_long
+    restart: unless-stopped
+    depends_on:
+      - frappe
+    environment:
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-employee360.localhost}
+      - REDIS_QUEUE=redis://redis-queue:6379
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/employee360
+    volumes:
+      - ./backend:/home/frappe/frappe-bench/apps/employee360
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - bench_logs:/home/frappe/frappe-bench/logs
+    working_dir: /home/frappe/frappe-bench/sites
+    command: bench worker --queue long
+
+  # ─── Frappe Scheduler ─────────────────────────────────────────────────────
+  scheduler:
+    image: frappe/erpnext-worker:v14
+    container_name: employee360_scheduler
+    restart: unless-stopped
+    depends_on:
+      - frappe
+    environment:
+      - FRAPPE_SITE_NAME=${FRAPPE_SITE_NAME:-employee360.localhost}
+      - REDIS_QUEUE=redis://redis-queue:6379
+      - PYTHONPATH=/home/frappe/frappe-bench/apps/employee360
+    volumes:
+      - ./backend:/home/frappe/frappe-bench/apps/employee360
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - bench_logs:/home/frappe/frappe-bench/logs
+    working_dir: /home/frappe/frappe-bench/sites
+    command: bench schedule
+
+  # ─── React Frontend (Vite Dev Server) ─────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: employee360_frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
 
 volumes:
   mariadb_data:
-
+  redis_cache_data:
+  redis_queue_data:
+  bench_sites:
+  bench_logs:
