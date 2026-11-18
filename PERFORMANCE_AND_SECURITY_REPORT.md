@@ -88,22 +88,22 @@ Every API was tested over 30 to 60 repeated iterations against the live 10.95M d
 
 | API Endpoint | Role | Iterations | Min (ms) | Median / P50 (ms) | P95 (ms) | P99 (ms) | Throughput (RPS) | Peak Memory Delta |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`ceo.search_employees` (Prefix ID)** | CEO | 60 | 33.12 | **40.20** | **53.55** | 66.73 | **23.8** | **0.14 MB** |
-| **`employee.get_employee_attendance_trend`** | Emp | 50 | 52.88 | **66.88** | **100.95** | 101.49 | **14.1** | **0.15 MB** |
-| **`ceo.search_employees` (Name search)** | CEO | 60 | 68.45 | **81.17** | **100.32** | 121.64 | **12.7** | **0.14 MB** |
-| **`employee.get_employee_activity` (Page 1)** | Emp | 50 | 71.30 | **85.44** | **115.59** | 128.66 | **10.9** | **0.15 MB** |
-| **`manager.get_manager_team`** | Mgr | 40 | 75.12 | **91.17** | **119.10** | 121.43 | **10.6** | **0.32 MB** |
-| **`employee.get_employee_leave_history`** | Emp | 50 | 74.50 | **92.53** | **148.43** | 150.31 | **10.2** | **0.14 MB** |
-| **`employee.get_employee_activity` (Date Range)** | Emp | 50 | 78.11 | **94.14** | **133.75** | 148.13 | **10.4** | **0.16 MB** |
-| **`manager.get_team_leave_overview`** | Mgr | 40 | 83.20 | **101.69** | **166.04** | 170.04 | **8.7** | **0.18 MB** |
-| **`manager.get_team_attendance_trend`** | Mgr | 40 | 95.40 | **115.94** | **127.13** | 161.26 | **9.0** | **0.20 MB** |
-| **`ceo.get_company_leave_overview`** | CEO | 40 | 110.15 | **133.44** | **169.67** | 169.75 | **7.4** | **0.13 MB** |
-| **`ceo.get_employee_overview` (Detail)** | CEO | 40 | 141.20 | **168.33** | **215.28** | 235.10 | **5.7** | **0.15 MB** |
-| **`ceo.get_department_analytics`** | CEO | 40 | 155.80 | **184.78** | **243.03** | 246.88 | **5.3** | **0.15 MB** |
-| **`attendance.get_today_attendance`** | Emp | 50 | 162.40 | **198.77** | **248.70** | 258.66 | **5.1** | **0.27 MB** |
-| **`manager.get_team_dashboard_summary`** | Mgr | 40 | 170.90 | **201.50** | **262.15** | 287.64 | **4.7** | **0.19 MB** |
-| **`ceo.get_company_dashboard_summary`** | CEO | 40 | 192.30 | **233.21** | **267.79** | 342.22 | **4.3** | **0.67 MB** |
-| **`ceo.get_company_attendance_trend` (30 days)**| CEO | 30 | 365.10 | **435.69** | **574.28** | 652.86 | **2.2** | **0.17 MB** |
+| **`employee.get_employee_leave_history`** | Emp | 50 | 3.25 | **4.61** | **6.55** | 9.50 | **208.0** | **0.01 MB** |
+| **`employee.get_employee_attendance_trend`** | Emp | 50 | 3.43 | **4.74** | **7.74** | 9.66 | **199.9** | **0.02 MB** |
+| **`employee.get_employee_activity` (Page 1)** | Emp | 50 | 3.41 | **5.29** | **8.45** | 8.63 | **175.1** | **0.02 MB** |
+| **`employee.get_employee_activity` (Date Range)** | Emp | 50 | 3.97 | **5.41** | **8.32** | 9.78 | **172.4** | **0.02 MB** |
+| **`ceo.get_company_leave_overview`** | CEO | 40 | 4.70 | **6.45** | **7.60** | 8.73 | **156.1** | **0.01 MB** |
+| **`ceo.search_employees` (Prefix ID)** | CEO | 60 | 6.37 | **8.17** | **13.57** | 14.66 | **111.7** | **0.01 MB** |
+| **`attendance.get_today_attendance`** | Emp | 50 | 5.85 | **8.31** | **12.80** | 14.82 | **116.7** | **0.19 MB** |
+| **`manager.get_team_leave_overview`** | Mgr | 40 | 8.00 | **10.79** | **15.29** | 17.40 | **87.5** | **0.06 MB** |
+| **`ceo.get_employee_overview` (Detail)** | CEO | 40 | 6.89 | **11.32** | **15.27** | 17.11 | **89.6** | **0.02 MB** |
+| **`manager.get_manager_team`** | Mgr | 40 | 10.18 | **16.28** | **27.72** | 28.31 | **59.8** | **0.19 MB** |
+| **`manager.get_team_attendance_trend`** | Mgr | 40 | 25.27 | **31.01** | **49.60** | 58.75 | **28.7** | **0.08 MB** |
+| **`ceo.search_employees` (Name search)** | CEO | 60 | 33.03 | **41.60** | **51.58** | 56.55 | **23.9** | **0.01 MB** |
+| **`manager.get_team_dashboard_summary`** | Mgr | 40 | 95.29 | **111.92** | **139.52** | 164.65 | **8.8** | **0.07 MB** |
+| **`ceo.get_department_analytics`** | CEO | 40 | 139.73 | **157.29** | **197.97** | 238.84 | **6.3** | **0.02 MB** |
+| **`ceo.get_company_dashboard_summary`** | CEO | 40 | 149.11 | **179.30** | **256.36** | 300.29 | **5.4** | **0.67 MB** |
+| **`ceo.get_company_attendance_trend` (30 days)**| CEO | 30 | 315.25 | **337.36** | **606.82** | 663.46 | **2.6** | **0.04 MB** |
 
 ### Memory Scalability Invariant
 * Across all 16 endpoints, the peak Python process memory delta remained strictly bounded between **0.13 MB and 0.67 MB**.

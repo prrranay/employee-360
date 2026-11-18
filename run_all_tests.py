@@ -23,11 +23,11 @@ def run_suite():
 
     # 1. Run Python Backend Integration Suites
     backend_suites = [
-        ("Employee Tests", "backend/apps/employee360/tests/integration/test_employee_integration.py"),
-        ("Attendance Tests", "backend/apps/employee360/tests/integration/test_attendance_integration.py"),
-        ("Permission Tests", "backend/apps/employee360/tests/integration/test_permissions_integration.py"),
-        ("Analytics Tests", "backend/apps/employee360/tests/integration/test_analytics_integration.py"),
-        ("Synthetic Seed Lifecycle Tests", "backend/apps/employee360/tests/integration/test_synthetic_seed_integration.py"),
+        ("Employee Tests", "backend/tests/integration/test_employee_integration.py"),
+        ("Attendance Tests", "backend/tests/integration/test_attendance_integration.py"),
+        ("Permission Tests", "backend/tests/integration/test_permissions_integration.py"),
+        ("Analytics Tests", "backend/tests/integration/test_analytics_integration.py"),
+        ("Synthetic Seed Lifecycle Tests", "backend/tests/integration/test_synthetic_seed_integration.py"),
     ]
 
     for suite_name, script_path in backend_suites:
@@ -55,7 +55,8 @@ def run_suite():
     # 2. Run Frontend Vitest Test Suites
     print("\n[*] Running: Frontend Vitest Suites (auth_and_routes, dashboards, interactions)...")
     t0 = time.time()
-    res_front = subprocess.run(["npx", "vitest", "run"], cwd="frontend", shell=True, capture_output=True, text=True)
+    cmd_front = "npx.cmd vitest run" if sys.platform == "win32" else "npx vitest run"
+    res_front = subprocess.run(cmd_front, cwd="frontend", shell=True, capture_output=True, text=True)
     dur_front = time.time() - t0
     output_front = res_front.stdout + res_front.stderr
     if res_front.returncode == 0:
@@ -69,9 +70,10 @@ def run_suite():
         results_summary.append(("Frontend Vitest Tests", "FAILED", dur_front, output_front[-200:]))
 
     # 3. Run Full Database Validator (12/12 checks across 10.95M rows)
+    clean_test_artifacts()
     print("\n[*] Running: Full 12-Check Database Validator on 10.95M rows...")
     t0 = time.time()
-    res_val = subprocess.run([sys.executable, "backend/apps/employee360/employee360/seed/validator.py"], capture_output=True, text=True)
+    res_val = subprocess.run([sys.executable, "backend/employee360/seed/validator.py"], capture_output=True, text=True)
     dur_val = time.time() - t0
     output_val = res_val.stdout + res_val.stderr
     if res_val.returncode == 0:

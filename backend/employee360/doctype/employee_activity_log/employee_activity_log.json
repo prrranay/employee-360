@@ -1,0 +1,162 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:EAL-{employee}-{activity_date}",
+  "creation": "2026-11-17 19:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "employee",
+    "activity_date",
+    "attendance_status",
+    "first_login",
+    "last_logout",
+    "total_work_seconds",
+    "active_seconds",
+    "total_sessions",
+    "calculated_at",
+    "is_regularized",
+    "regularization_exception"
+  ],
+  "fields": [
+    {
+      "fieldname": "employee",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Employee",
+      "options": "Employee",
+      "reqd": 1
+    },
+    {
+      "fieldname": "activity_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Activity Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "attendance_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Attendance Status",
+      "options": "Present\nLate\nHalf Day\nAbsent\nOn Leave\nWeekly Off\nHoliday\nMissing Check-out\nPending Review",
+      "reqd": 1
+    },
+    {
+      "fieldname": "first_login",
+      "fieldtype": "Time",
+      "in_list_view": 1,
+      "label": "First Login"
+    },
+    {
+      "fieldname": "last_logout",
+      "fieldtype": "Time",
+      "in_list_view": 1,
+      "label": "Last Logout"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_work_seconds",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Total Work Seconds"
+    },
+    {
+      "default": "0",
+      "fieldname": "active_seconds",
+      "fieldtype": "Int",
+      "label": "Active Seconds"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_sessions",
+      "fieldtype": "Int",
+      "label": "Total Sessions"
+    },
+    {
+      "fieldname": "calculated_at",
+      "fieldtype": "Datetime",
+      "label": "Calculated At",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "is_regularized",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Is Regularized"
+    },
+    {
+      "fieldname": "regularization_exception",
+      "fieldtype": "Link",
+      "label": "Regularization Exception",
+      "options": "Attendance Exception"
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "modified": "2026-11-17 19:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Employee360",
+  "name": "Employee Activity Log",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "CEO",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Manager",
+      "share": 0,
+      "write": 0
+    },
+    {
+      "create": 0,
+      "delete": 0,
+      "email": 0,
+      "export": 0,
+      "print": 0,
+      "read": 1,
+      "report": 0,
+      "role": "Employee",
+      "share": 0,
+      "write": 0
+    }
+  ],
+  "sort_field": "activity_date",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 0
+}
+

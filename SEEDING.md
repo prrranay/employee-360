@@ -101,17 +101,17 @@ If interrupted by process kill or power loss, re-running `runner.py` detects the
 ### Run Seeding
 ```bash
 # Direct runner on host or container
-python backend/apps/employee360/employee360/seed/runner.py
+python backend/employee360/seed/runner.py
 ```
 
 ### Validate Dataset Integrity
 ```bash
-python backend/apps/employee360/employee360/seed/validator.py
+python backend/employee360/seed/validator.py
 ```
 
 ### Safe Development Database Reset
 ```bash
 # Protected by safety confirmation flag
-python backend/apps/employee360/employee360/seed/reset.py --force-dev-reset
+python backend/employee360/seed/reset.py --force-dev-reset
 ```
 

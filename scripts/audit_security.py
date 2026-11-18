@@ -6,14 +6,12 @@ import pymysql
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
-APP_DIR = os.path.join(BACKEND_DIR, "apps", "employee360")
 sys.path.insert(0, BACKEND_DIR)
-sys.path.insert(0, APP_DIR)
 
-import frappe_bridge
-frappe_bridge.install_frappe_compat()
+import frappe_runtime
+frappe_runtime.install_frappe_compat()
 import frappe
-from frappe_bridge import _current_user_var, PermissionError, AuthenticationError, ValidationError
+from frappe_runtime import _current_user_var, PermissionError, AuthenticationError, ValidationError
 
 from employee360.api import auth_utils, ceo, manager, employee, attendance
 
@@ -181,6 +179,8 @@ class SecurityAuditTest(unittest.TestCase):
         """Test attendance regularization creates an immutable audit record with source='Admin Correction'."""
         _current_user_var.set(self.emp1_user)
         target_date = "2026-10-06"
+        frappe.db.sql(f"DELETE FROM `tabEmployee Checkin` WHERE employee = '{self.emp1_id}' AND source = 'Admin Correction';")
+        frappe.db.commit()
         
         corr_res = attendance.request_attendance_correction(
             activity_date=target_date,

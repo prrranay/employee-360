@@ -104,32 +104,51 @@ frontend/
 ```
 
 ### 3.3 Backend Directory Structure
+
+The backend application follows a clean, standardized Frappe Bench application structure without redundant nesting:
+
 ```
 backend/
-├── apps/
-│   └── employee360/
-│       └── employee360/
-│           ├── api/                     # Whitelisted RPC controllers
-│           │   ├── auth_utils.py        # RBAC helpers, recursive CTE manager tree
-│           │   ├── ceo.py               # CEO company dashboard, search, trends
-│           │   ├── manager.py           # Team dashboard, leave approvals
-│           │   ├── employee.py          # Profile, history, leave application
-│           │   └── attendance.py        # Checkin, checkout, audit regularization
-│           ├── doctype/                 # Frappe Doctype definitions & controllers
-│           │   ├── employee/            # Cycle-detection, unique ID rules
-│           │   ├── employee_checkin/    # Atomic punches, debounce validation
-│           │   ├── employee_activity_log/ # Daily summary aggregation logic
-│           │   └── leave_application/   # Overlap detection, anti-self-approval
-│           ├── seed/                    # 10.95M synthetic data generator & validator
-│           │   ├── config.py            # Target constants, seed window (365 days)
-│           │   ├── generator.py         # Batch streaming generator (48k rows/s)
-│           │   ├── runner.py            # Multi-row bulk inserter & index manager
-│           │   ├── reset.py             # Safe disposable DB truncation utility
-│           │   └── validator.py         # 12-check SQL aggregation validator
-│           └── schema.sql               # MariaDB DDL with performance indexes
-├── frappe_bridge.py                     # High-performance Frappe compatibility layer
-├── server.py                            # FastAPI HTTP gateway & session server
-└── tests/                               # Comprehensive integration test suites
+├── employee360/                            # Core Frappe Application Package
+│   ├── __init__.py                         # Module exports & canonical import resolution
+│   ├── hooks.py                            # Frappe hooks: doc_events, scheduler_events, fixtures
+│   ├── modules.txt                         # Module list declaration
+│   ├── schema.sql                          # Canonical SQL DDL & composite B-Tree indexes
+│   ├── tasks.py                            # Frappe background scheduler jobs
+│   ├── api/                                # Whitelisted RPC API Controllers (@frappe.whitelist)
+│   │   ├── __init__.py
+│   │   ├── attendance.py                   # Concurrency-locked checkin, checkout, regularization
+│   │   ├── auth_utils.py                   # Session verification, RBAC, recursive CTE tree
+│   │   ├── ceo.py                          # CEO company summaries, analytics, trends
+│   │   ├── employee.py                     # Employee self-service, activity history, leave
+│   │   └── manager.py                      # Team dashboard, leave approvals, exception reviews
+│   ├── doctype/                            # Frappe DocType Definitions & Controllers
+│   │   ├── employee/                       # Employee DocType (DAG cycle detection, unique IDs)
+│   │   ├── employee_checkin/               # Checkin DocType (timestamp ordering, duplicate rules)
+│   │   ├── employee_activity_log/          # Activity Log DocType (recalculation, daily summary)
+│   │   ├── leave_application/              # Leave DocType (anti-self-approval, date overlap)
+│   │   ├── attendance_exception/           # Exception DocType (audit regularization trail)
+│   │   └── shift/                          # Shift DocType (working hours, grace periods)
+│   └── seed/                               # Synthetic Dataset Generator (10.95M scale)
+│       ├── __init__.py
+│       ├── config.py                       # Scale constants (30k employees, 365 days)
+│       ├── generator.py                    # Streaming generator with mathematical session logic
+│       ├── runner.py                       # Bulk multi-row batch inserter & user provisioner
+│       ├── validator.py                    # 12-check SQL dataset integrity validator
+│       └── reset.py                        # Safe database reset utility
+├── tests/                                  # Integration & Unit Test Suites
+│   ├── integration/
+│   │   ├── test_employee_integration.py
+│   │   ├── test_attendance_integration.py
+│   │   ├── test_permissions_integration.py
+│   │   ├── test_analytics_integration.py
+│   │   └── test_synthetic_seed_integration.py
+│   ├── test_api_security.py
+│   └── test_doctypes.py
+├── setup.py                                # Python setuptools package specification
+├── requirements.txt                        # Backend dependencies
+├── frappe_runtime.py                       # Standalone Frappe Execution Runtime engine
+└── server.py                               # Local development HTTP/RPC gateway server (Port 8000)
 ```
 
 ### 3.4 Database Schema & Index Design
@@ -215,15 +234,31 @@ Verify containers are healthy:
 #### Step 2: Initialize Database Schema
 Run the schema initialization script to create all tables and performance indexes:
 ```bash
-python -c "import pymysql; conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', password='root', database='employee360'); cur = conn.cursor(); sql = open('backend/apps/employee360/employee360/schema.sql').read(); [cur.execute(s) for s in sql.split(';') if s.strip()]; conn.commit(); print('Database schema initialized!')"
+python -c "import pymysql; conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', password='root', database='employee360'); cur = conn.cursor(); sql = open('backend/employee360/schema.sql').read(); [cur.execute(s) for s in sql.split(';') if s.strip()]; conn.commit(); print('Database schema initialized!')"
 ```
 
-#### Step 3: Install Backend Dependencies & Start Server
-```bash
-# Python dependencies
-pip install fastapi uvicorn pymysql
+#### Step 3: Start the Backend Server
 
-# Start API server on Port 8000
+You can run the backend either via the genuine Frappe Docker container service or using the local development server:
+
+##### Option A: Genuine Frappe Bench Docker Container (Recommended)
+```bash
+# Start MariaDB, Redis, and Frappe backend container
+docker compose up -d
+
+# Inside the Frappe container, install the Employee360 app into the bench environment
+docker exec -it employee360_frappe bash -c "
+  cd /home/frappe/frappe-bench && \
+  ./env/bin/pip install -e apps/employee360
+"
+```
+
+##### Option B: Local Python Development Runtime
+```bash
+# Install Python dependencies (including passlib for PBKDF2 password verification)
+pip install fastapi uvicorn pymysql passlib
+
+# Start backend server on Port 8000
 python backend/server.py
 ```
 
@@ -235,13 +270,22 @@ npm run dev -- --host 127.0.0.1 --port 5173
 ```
 Access the application at `http://127.0.0.1:5173`.
 
+#### Step 5: Running Frappe Scheduled Tasks & Background Workers
+Employee360 includes automated scheduler tasks for unclosed session recalculation and exception detection:
+```bash
+# Run unclosed session recalculation task
+python -c "import sys; sys.path.insert(0, 'backend'); import frappe_runtime; frappe_runtime.install_frappe_compat(); from employee360.tasks import recalculate_unclosed_sessions; print(recalculate_unclosed_sessions())"
+```
+
 ---
 
 ## 5. Demo User Accounts & Credentials
 
 The seed generator provisions six authenticated user accounts corresponding to key organizational roles.
 
-> **Default Password for All Demo Accounts:** `Admin123!` (or `admin` in development)
+> **Default Password for All Demo Accounts:** `Admin123!`
+> 
+> All passwords are cryptographically hashed using **PBKDF2-SHA256** (with 29,000 iterations). Insecure hardcoded password bypasses have been completely removed.
 
 | Role | Email / Login Username | Full Name | Employee ID | Department | Position |
 | :--- | :--- | :--- | :---: | :--- | :--- |
@@ -253,11 +297,17 @@ The seed generator provisions six authenticated user accounts corresponding to k
 | **Employee** | `emp3@employee360.local` | Priya Sharma | `EMP-01364` | Sales | Account Executive |
 
 ### Changing Passwords Safely
-To update a demo user password, update the SHA-256 hash or run the following SQL command:
-```sql
-UPDATE `tabUser` 
-SET `password` = SHA2('YourNewPasswordHere!', 256)
-WHERE `name` = 'emp1@employee360.local';
+To update a user's password securely using PBKDF2-SHA256:
+```python
+from passlib.hash import pbkdf2_sha256
+import pymysql
+
+hashed = pbkdf2_sha256.hash("YourNewPasswordHere!")
+conn = pymysql.connect(host="127.0.0.1", port=3306, user="root", password="root", database="employee360")
+with conn.cursor() as cur:
+    cur.execute("UPDATE `tabUser` SET `password` = %s WHERE `name` = %s", (hashed, "emp1@employee360.local"))
+conn.commit()
+conn.close()
 ```
 
 ---
@@ -293,7 +343,7 @@ sequenceDiagram
 ```
 
 ### 6.1 Seed Configuration Parameters
-Defined in `backend/apps/employee360/employee360/seed/config.py`:
+Defined in `backend/employee360/seed/config.py`:
 * `TOTAL_EMPLOYEES`: `30000`
 * `DAYS_PER_EMPLOYEE`: `365`
 * `TOTAL_ACTIVITY_RECORDS`: `10950000` ($30,000 \times 365$)
@@ -305,7 +355,7 @@ Defined in `backend/apps/employee360/employee360/seed/config.py`:
 ### 6.2 Executing the Seed Command
 To execute the complete seeding process:
 ```bash
-python backend/apps/employee360/employee360/seed/runner.py
+python backend/employee360/seed/runner.py
 ```
 
 ### 6.3 Monitoring Seeding Progress
@@ -329,7 +379,7 @@ If the seed process is terminated (power interruption, process kill, SIGINT), th
 ### 6.5 Validating Seeding Integrity
 Execute the automated 12-check SQL validator:
 ```bash
-python backend/apps/employee360/employee360/seed/validator.py
+python backend/employee360/seed/validator.py
 ```
 Expected output:
 ```
@@ -353,7 +403,7 @@ Result: 12 Passed, 0 Failed.
 ### 6.6 Safely Resetting a Disposable Database
 To truncate and reset all synthetic data without altering the schema:
 ```bash
-python backend/apps/employee360/employee360/seed/reset.py
+python backend/employee360/seed/reset.py
 ```
 
 ---
@@ -482,16 +532,16 @@ TEST EXECUTION SUMMARY: 7 SUITES PASSED, 0 FAILED (Total time: 89.82s)
 ### 9.2 Running Individual Test Suites
 ```bash
 # Employee schema & DAG acyclicity tests
-python backend/apps/employee360/tests/integration/test_employee_integration.py
+python backend/tests/integration/test_employee_integration.py
 
 # Attendance punch, debounce & regularization tests
-python backend/apps/employee360/tests/integration/test_attendance_integration.py
+python backend/tests/integration/test_attendance_integration.py
 
 # RBAC permissions & anti-self-approval tests
-python backend/apps/employee360/tests/integration/test_permissions_integration.py
+python backend/tests/integration/test_permissions_integration.py
 
 # High-volume analytics & pagination tests
-python backend/apps/employee360/tests/integration/test_analytics_integration.py
+python backend/tests/integration/test_analytics_integration.py
 
 # Frontend Vitest suites (Authentication, Dashboards, Interactions)
 cd frontend && npx vitest run

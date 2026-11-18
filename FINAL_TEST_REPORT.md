@@ -8,14 +8,14 @@
 
 | Category | Suite File / Tool | Tests Executed | Passed | Failed | Duration | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Employee Module** | `test_employee_integration.py` | 7 | 7 | 0 | 0.50s | **PASSED** |
-| **Attendance & Regularization** | `test_attendance_integration.py` | 11 | 11 | 0 | 5.45s | **PASSED** |
-| **Permissions & Access Control** | `test_permissions_integration.py` | 6 | 6 | 0 | 2.40s | **PASSED** |
-| **Analytics & Reporting** | `test_analytics_integration.py` | 8 | 8 | 0 | 1.28s | **PASSED** |
-| **Synthetic Seed Lifecycle** | `test_synthetic_seed_integration.py` | 12 | 12 | 0 | 42.22s | **PASSED** |
-| **Frontend Architecture** | Vitest + JSDOM (`auth`, `dashboards`, `interactions`) | 11 | 11 | 0 | 7.63s | **PASSED** |
-| **10.95M Row Dataset Validator** | `validator.py` (MariaDB SQL Aggregations) | 12 | 12 | 0 | 53.99s | **PASSED** |
-| **TOTAL VERIFICATION CHECKS** | **Full System Surface** | **67** | **67** | **0** | **120.62s** | **100% PASS** |
+| **Employee Module** | `test_employee_integration.py` | 7 | 7 | 0 | 0.23s | **PASSED** |
+| **Attendance & Regularization** | `test_attendance_integration.py` | 11 | 11 | 0 | 0.54s | **PASSED** |
+| **Permissions & Access Control** | `test_permissions_integration.py` | 6 | 6 | 0 | 0.73s | **PASSED** |
+| **Analytics & Reporting** | `test_analytics_integration.py` | 8 | 8 | 0 | 0.68s | **PASSED** |
+| **Synthetic Seed Lifecycle** | `test_synthetic_seed_integration.py` | 12 | 12 | 0 | 43.34s | **PASSED** |
+| **Frontend Architecture** | Vitest + JSDOM (`auth`, `dashboards`, `interactions`) | 12 | 12 | 0 | 8.33s | **PASSED** |
+| **10.95M Row Dataset Validator** | `validator.py` (MariaDB SQL Aggregations) | 12 | 12 | 0 | 76.68s | **PASSED** |
+| **TOTAL VERIFICATION CHECKS** | **Full System Surface** | **68** | **68** | **0** | **137.26s** | **100% PASS** |
 
 ---
 

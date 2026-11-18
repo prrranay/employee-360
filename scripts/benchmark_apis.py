@@ -6,14 +6,12 @@ import tracemalloc
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
-APP_DIR = os.path.join(BACKEND_DIR, "apps", "employee360")
 sys.path.insert(0, BACKEND_DIR)
-sys.path.insert(0, APP_DIR)
 
-import frappe_bridge
-frappe_bridge.install_frappe_compat()
+import frappe_runtime
+frappe_runtime.install_frappe_compat()
 import frappe
-from frappe_bridge import _current_user_var
+from frappe_runtime import _current_user_var
 
 from employee360.api import ceo, manager, employee, attendance
 

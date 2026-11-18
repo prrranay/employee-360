@@ -25,6 +25,21 @@ export const apiClient = axios.create({
   }
 });
 
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+  return match ? decodeURIComponent(match[3]) : null;
+}
+
+// Request interceptor to attach CSRF token for state-mutating requests
+apiClient.interceptors.request.use((config) => {
+  const csrfToken = getCookie('csrf_token');
+  if (csrfToken && ['post', 'put', 'delete', 'patch'].includes((config.method || '').toLowerCase())) {
+    config.headers['X-Frappe-CSRF-Token'] = csrfToken;
+  }
+  return config;
+});
+
 // Response interceptor for Frappe `{ message: ... }` unwrapping and 401 handling
 apiClient.interceptors.response.use(
   (response) => {

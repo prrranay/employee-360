@@ -1,22 +1,40 @@
+"""
+Employee360 — Local Development API Server
+============================================
+This server provides the HTTP gateway exposing Frappe whitelisted RPC endpoints
+(`/api/method/...`), native login (`/api/method/login`), and logout (`/api/method/logout`)
+for local frontend development (e.g. Vite proxy at http://localhost:5173).
+
+In containerized production deployments, the application runs natively inside the
+Frappe Bench environment (via `docker compose up -d frappe-backend`).
+"""
 import sys
 import os
+import time
 import uuid
+import secrets
 import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from passlib.hash import pbkdf2_sha256
 
-# Ensure backend and employee360 app are on sys.path
+# Ensure backend package is on sys.path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
-app_dir = os.path.join(backend_dir, "apps", "employee360")
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
-if app_dir not in sys.path:
-    sys.path.insert(0, app_dir)
 
-import frappe_bridge
-frappe_bridge.install_frappe_compat()
+import frappe_runtime
+frappe_runtime.install_frappe_compat()
 
 import frappe
-from frappe_bridge import _current_user_var, ValidationError, PermissionError, AuthenticationError, MandatoryError, DuplicateEntryError, DoesNotExistError
+from frappe_runtime import (
+    _current_user_var,
+    ValidationError,
+    PermissionError,
+    AuthenticationError,
+    MandatoryError,
+    DuplicateEntryError,
+    DoesNotExistError
+)
 
 from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -34,26 +52,67 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Frappe-CSRF-Token"],
 )
 
 # In-memory session store backed by database
-SESSION_STORE: Dict[str, str] = {}
+SESSION_STORE: Dict[str, Dict[str, Any]] = {}
 
-def get_user_from_sid(sid: Optional[str]) -> str:
+# Rate limiting for login abuse protection: max 5 failures per 15 minutes per IP
+LOGIN_FAILURES: Dict[str, List[float]] = {}
+RATE_LIMIT_MAX_ATTEMPTS = 5
+RATE_LIMIT_WINDOW_SECONDS = 900  # 15 minutes
+
+
+def check_rate_limit(client_ip: str):
+    now = time.time()
+    failures = LOGIN_FAILURES.get(client_ip, [])
+    # Filter attempts within window
+    failures = [t for t in failures if now - t < RATE_LIMIT_WINDOW_SECONDS]
+    LOGIN_FAILURES[client_ip] = failures
+    if len(failures) >= RATE_LIMIT_MAX_ATTEMPTS:
+        retry_after = int(RATE_LIMIT_WINDOW_SECONDS - (now - failures[0]))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Account temporarily locked for {max(1, retry_after)} seconds."
+        )
+
+
+def record_login_failure(client_ip: str):
+    now = time.time()
+    failures = LOGIN_FAILURES.get(client_ip, [])
+    failures.append(now)
+    LOGIN_FAILURES[client_ip] = failures
+
+
+def clear_login_failures(client_ip: str):
+    LOGIN_FAILURES.pop(client_ip, None)
+
+
+def get_session_info(sid: Optional[str]) -> Optional[Dict[str, Any]]:
     if not sid:
-        return "Guest"
+        return None
     if sid in SESSION_STORE:
         return SESSION_STORE[sid]
     # Check tabSessions in database
     try:
-        rows = frappe.db.sql("SELECT `user` FROM `tabSessions` WHERE `sid` = %s", (sid,), as_dict=True)
+        rows = frappe.db.sql(
+            "SELECT `user`, `lastupdate` FROM `tabSessions` WHERE `sid` = %s AND `status` = 'Active'",
+            (sid,),
+            as_dict=True
+        )
         if rows:
             user = rows[0]["user"]
-            SESSION_STORE[sid] = user
-            return user
+            session_data = {
+                "user": user,
+                "csrf_token": uuid.uuid4().hex,
+                "created_at": time.time()
+            }
+            SESSION_STORE[sid] = session_data
+            return session_data
     except Exception:
         pass
-    return "Guest"
+    return None
 
 
 @app.middleware("http")
@@ -65,7 +124,20 @@ async def frappe_session_middleware(request: Request, call_next):
         if auth_header.lower().startswith("bearer ") or auth_header.lower().startswith("token "):
             sid = auth_header.split(" ", 1)[1].strip()
 
-    user = get_user_from_sid(sid)
+    session_info = get_session_info(sid)
+    user = session_info["user"] if session_info else "Guest"
+
+    # CSRF Protection on mutating requests (POST, PUT, DELETE) for authenticated sessions
+    if request.method in ("POST", "PUT", "DELETE") and user != "Guest":
+        path = request.url.path
+        if not path.endswith("/login") and not path.endswith("/logout"):
+            # Check CSRF token in header or cookie
+            header_token = request.headers.get("x-frappe-csrf-token") or request.headers.get("x-csrf-token")
+            session_csrf = session_info.get("csrf_token") if session_info else None
+            # If a CSRF token header is provided, validate it against the session CSRF token
+            if header_token and session_csrf and not secrets.compare_digest(header_token, session_csrf):
+                return JSONResponse(status_code=403, content={"message": "CSRF verification failed: Invalid Token"})
+
     token = _current_user_var.set(user)
     try:
         response = await call_next(request)
@@ -97,6 +169,12 @@ async def frappe_exception_handler(request: Request, exc: Exception):
 # ==========================================
 @app.post("/api/method/login")
 async def login(request: Request, response: Response):
+    client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+
+    check_rate_limit(client_ip)
+
     try:
         data = await request.json()
     except Exception:
@@ -105,48 +183,64 @@ async def login(request: Request, response: Response):
     usr = data.get("usr", "").strip()
     pwd = data.get("pwd", "").strip()
 
-    if not usr:
-        raise HTTPException(status_code=400, detail="Username is required")
+    if not usr or not pwd:
+        raise HTTPException(status_code=400, detail="Username and password are required")
 
-    # Demo users and password validation
-    # Allowed demo users: ceo@employee360.local, manager1@..., manager2@..., emp1@..., emp2@..., emp3@...
-    # password: Admin123!
-    is_valid = False
-    full_name = usr
-
+    # Fetch User from database
     user_rows = frappe.db.sql(
-        "SELECT name, full_name, enabled FROM `tabUser` WHERE name = %s",
+        "SELECT name, full_name, enabled, password FROM `tabUser` WHERE name = %s",
         (usr,),
         as_dict=True
     )
-    if user_rows:
-        if user_rows[0].get("enabled") == 0:
-            raise HTTPException(status_code=403, detail="Account is disabled")
-        full_name = user_rows[0].get("full_name") or usr
-        # Standard demo check
-        if pwd == "Admin123!" or pwd == "admin":
-            is_valid = True
-    elif usr in ("Administrator", "admin"):
-        if pwd in ("Admin123!", "admin"):
-            is_valid = True
-            full_name = "Administrator"
 
-    if not is_valid:
+    if not user_rows:
+        record_login_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
+    user_data = user_rows[0]
+    if user_data.get("enabled") == 0:
+        raise HTTPException(status_code=403, detail="Account is disabled")
+
+    stored_hash = user_data.get("password") or ""
+    is_valid = False
+
+    # Strictly verify password through Frappe standard pbkdf2_sha256
+    try:
+        if stored_hash.startswith("$pbkdf2-sha256$"):
+            is_valid = pbkdf2_sha256.verify(pwd, stored_hash)
+        else:
+            is_valid = False
+    except Exception:
+        is_valid = False
+
+    if not is_valid:
+        record_login_failure(client_ip)
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # Authentication succeeded — reset rate limit tracking
+    clear_login_failures(client_ip)
+
+    full_name = user_data.get("full_name") or usr
     sid = uuid.uuid4().hex
-    SESSION_STORE[sid] = usr
+    csrf_token = secrets.token_hex(32)
+
+    SESSION_STORE[sid] = {
+        "user": usr,
+        "csrf_token": csrf_token,
+        "created_at": time.time()
+    }
 
     # Persist session to tabSessions
     try:
         frappe.db.sql(
             "INSERT INTO `tabSessions` (sid, `user`, status, lastupdate) VALUES (%s, %s, 'Active', NOW()) "
-            "ON DUPLICATE KEY UPDATE `user` = VALUES(`user`), lastupdate = NOW()",
+            "ON DUPLICATE KEY UPDATE `user` = VALUES(`user`), status = 'Active', lastupdate = NOW()",
             (sid, usr)
         )
     except Exception:
         pass
 
+    # Session cookie (HttpOnly for security)
     response.set_cookie(
         key="sid",
         value=sid,
@@ -156,10 +250,23 @@ async def login(request: Request, response: Response):
         max_age=86400 * 7
     )
 
+    # CSRF cookie (readable by frontend client to set X-Frappe-CSRF-Token header)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        samesite="lax",
+        path="/",
+        max_age=86400 * 7
+    )
+
+    response.headers["X-Frappe-CSRF-Token"] = csrf_token
+
     return {
         "message": "Logged In",
         "home_page": "/dashboard",
-        "full_name": full_name
+        "full_name": full_name,
+        "csrf_token": csrf_token
     }
 
 
@@ -174,6 +281,7 @@ async def logout(request: Request, response: Response):
             pass
 
     response.delete_cookie(key="sid", path="/")
+    response.delete_cookie(key="csrf_token", path="/")
     return {"message": "Logged Out"}
 
 
