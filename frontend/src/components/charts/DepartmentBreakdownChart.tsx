@@ -31,19 +31,20 @@ export const DepartmentBreakdownChart: React.FC<DepartmentBreakdownChartProps> =
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+          margin={{ top: 5, right: 15, left: 0, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
           <XAxis
             type="number"
             domain={[0, 100]}
-            tick={{ fontSize: 11, fill: '#64748b' }}
+            tick={{ fontSize: 10, fill: '#64748b' }}
             tickFormatter={(val) => `${val}%`}
           />
           <YAxis
             type="category"
             dataKey="department"
-            tick={{ fontSize: 11, fill: '#334155', fontWeight: 500 }}
+            width={95}
+            tick={{ fontSize: 10, fill: '#334155', fontWeight: 500 }}
             tickLine={false}
             axisLine={false}
           />

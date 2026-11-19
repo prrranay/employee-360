@@ -47,31 +47,31 @@ export const EmployeeDashboardView: React.FC = () => {
   }));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Top Welcome Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
             Welcome back, {user?.employee?.employee_name || 'Team Member'}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {user?.employee?.designation} • {user?.employee?.department}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setCorrectionModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
           >
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            Request Correction
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>Request Correction</span>
           </button>
           <button
             onClick={() => setLeaveModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition"
           >
-            <FilePlus className="h-4 w-4" />
-            Apply Leave
+            <FilePlus className="h-4 w-4 shrink-0" />
+            <span>Apply Leave</span>
           </button>
         </div>
       </div>
@@ -87,7 +87,7 @@ export const EmployeeDashboardView: React.FC = () => {
         {loadingSummary ? (
           <LoadingSkeleton rows={1} height="h-24" />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard
               title="Attendance Rate"
               value={`${summary?.attendance_percentage || 0}%`}
@@ -125,7 +125,7 @@ export const EmployeeDashboardView: React.FC = () => {
       </div>
 
       {/* Recent Personal Trend */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
         <h3 className="text-sm font-bold text-slate-900 mb-1">Recent 14-Day Attendance Log</h3>
         <p className="text-xs text-slate-500 mb-4">Daily work duration and attendance status</p>
         {loadingTrends ? (

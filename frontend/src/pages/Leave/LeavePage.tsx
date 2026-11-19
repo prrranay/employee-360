@@ -79,11 +79,11 @@ export const LeavePage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Leave Management</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Leave Management</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {activeTab === 'team'
               ? 'Review and manage team leave requests'
@@ -93,57 +93,57 @@ export const LeavePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {(isManager || isCeo) && (
-            <div className="flex rounded-xl border border-slate-200 bg-white p-1 text-xs">
+            <div className="flex flex-wrap sm:flex-nowrap rounded-xl border border-slate-200 bg-white p-1 text-xs w-full sm:w-auto">
               <button
                 onClick={() => {
                   setActiveTab('team');
                   setPage(1);
                 }}
-                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                className={`flex-1 sm:flex-initial rounded-lg px-2.5 sm:px-3 py-1.5 font-semibold text-center transition ${
                   activeTab === 'team'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {isCeo ? 'Manager & Team Requests' : 'Team Requests'}
+                {isCeo ? 'Requests' : 'Team Requests'}
               </button>
               <button
                 onClick={() => {
                   setActiveTab('calendar');
                   setCalendarPage(1);
                 }}
-                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                className={`flex-1 sm:flex-initial rounded-lg px-2.5 sm:px-3 py-1.5 font-semibold text-center transition ${
                   activeTab === 'calendar'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Team Calendar
+                Calendar
               </button>
               <button
                 onClick={() => {
                   setActiveTab('personal');
                   setPage(1);
                 }}
-                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                className={`flex-1 sm:flex-initial rounded-lg px-2.5 sm:px-3 py-1.5 font-semibold text-center transition ${
                   activeTab === 'personal'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                My Applications
+                My Leaves
               </button>
             </div>
           )}
 
           <button
             onClick={() => setApplyModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition"
           >
             <FilePlus className="h-4 w-4" />
-            Apply Leave
+            <span>Apply Leave</span>
           </button>
         </div>
       </div>
@@ -155,7 +155,7 @@ export const LeavePage: React.FC = () => {
           {loadingBalances ? (
             <LoadingSkeleton rows={1} height="h-24" />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {balances?.map((b) => (
                 <div key={b.leave_type} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
                   <div className="flex items-center justify-between">
@@ -182,13 +182,13 @@ export const LeavePage: React.FC = () => {
       {/* Main Tab Content */}
       {activeTab === 'calendar' ? (
         /* Team Leave Calendar View */
-        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs p-5">
+        <div className="rounded-2xl border border-slate-200/90 bg-white shadow-xs p-4 sm:p-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-indigo-600" />
+              <Calendar className="h-4 w-4 text-indigo-600 shrink-0" />
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Team Leave Calendar Schedule</h3>
             </div>
-            <span className="text-xs text-slate-500 font-medium">{calendarEvents?.length || 0} scheduled leaves</span>
+            <span className="text-xs text-slate-500 font-medium">{calendarEvents?.length || 0} scheduled</span>
           </div>
 
           {loadingCalendar ? (
@@ -200,7 +200,7 @@ export const LeavePage: React.FC = () => {
             />
           ) : (
             <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {calendarEvents
                   .slice((calendarPage - 1) * calendarPageSize, calendarPage * calendarPageSize)
                   .map((evt) => (
@@ -231,7 +231,7 @@ export const LeavePage: React.FC = () => {
                   ))}
               </div>
 
-              <div className="mt-5 -mx-5 -mb-5">
+              <div className="mt-5 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5">
                 <Pagination
                   currentPage={calendarPage}
                   totalPages={Math.ceil(calendarEvents.length / calendarPageSize) || 1}
@@ -257,33 +257,33 @@ export const LeavePage: React.FC = () => {
           ) : (
             <div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs min-w-[650px]">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-500 font-semibold uppercase tracking-wider">
-                      {activeTab === 'team' && <th className="py-3 px-6">Employee</th>}
-                      <th className="py-3 px-6">Leave Type</th>
-                      <th className="py-3 px-6">Dates</th>
-                      <th className="py-3 px-6">Reason</th>
-                      <th className="py-3 px-6">Status</th>
-                      <th className="py-3 px-6">Applied On</th>
-                      <th className="py-3 px-6 text-right">Action</th>
+                      {activeTab === 'team' && <th className="py-3 px-4 sm:px-6">Employee</th>}
+                      <th className="py-3 px-4 sm:px-6">Leave Type</th>
+                      <th className="py-3 px-4 sm:px-6">Dates</th>
+                      <th className="py-3 px-4 sm:px-6">Reason</th>
+                      <th className="py-3 px-4 sm:px-6">Status</th>
+                      <th className="py-3 px-4 sm:px-6">Applied On</th>
+                      <th className="py-3 px-4 sm:px-6 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(activeTab === 'team' ? teamLeaves : personalLeaves)!.records.map((req) => (
                       <tr key={req.name} className="hover:bg-slate-50/50">
                         {activeTab === 'team' && (
-                          <td className="py-3.5 px-6 font-semibold text-slate-900">
+                          <td className="py-3.5 px-4 sm:px-6 font-semibold text-slate-900 whitespace-nowrap">
                             {req.employee_name || req.employee}
                             <div className="text-[10px] text-slate-400 font-normal">{req.department}</div>
                           </td>
                         )}
-                        <td className="py-3.5 px-6 font-medium text-slate-800">{req.leave_type}</td>
-                        <td className="py-3.5 px-6 text-slate-600 font-medium">
+                        <td className="py-3.5 px-4 sm:px-6 font-medium text-slate-800 whitespace-nowrap">{req.leave_type}</td>
+                        <td className="py-3.5 px-4 sm:px-6 text-slate-600 font-medium whitespace-nowrap">
                           {formatDate(req.from_date)} – {formatDate(req.to_date)}
                         </td>
-                        <td className="py-3.5 px-6 text-slate-600 max-w-xs truncate" title={req.reason}>{req.reason}</td>
-                        <td className="py-3.5 px-6">
+                        <td className="py-3.5 px-4 sm:px-6 text-slate-600 max-w-xs truncate" title={req.reason}>{req.reason}</td>
+                        <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap">
                           <span
                             className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
                               req.status === 'Approved'
@@ -298,8 +298,8 @@ export const LeavePage: React.FC = () => {
                             {req.status}
                           </span>
                         </td>
-                        <td className="py-3.5 px-6 text-slate-500">{formatDate(req.applied_at)}</td>
-                        <td className="py-3.5 px-6 text-right">
+                        <td className="py-3.5 px-4 sm:px-6 text-slate-500 whitespace-nowrap">{formatDate(req.applied_at)}</td>
+                        <td className="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
                           {activeTab === 'team' ? (
                             req.status === 'Pending' ? (
                               <div className="flex items-center justify-end gap-1.5">

@@ -94,7 +94,7 @@ export const PunchWidget: React.FC = () => {
   const isCheckedIn = today?.current_state === 'Checked In';
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-sm">
       {errorMsg && (
         <div className="mb-4 flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-medium text-rose-700">
           <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600" />
@@ -109,10 +109,10 @@ export const PunchWidget: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
         {/* Left Status Summary */}
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Live Attendance Status
             </span>
@@ -125,8 +125,8 @@ export const PunchWidget: React.FC = () => {
               </span>
             )}
           </div>
-          <div className="flex items-baseline gap-3 pt-1">
-            <span className="text-3xl font-extrabold text-slate-900">
+          <div className="flex items-baseline gap-2 sm:gap-3 pt-1">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
               {today?.total_work_formatted || '0h 0m'}
             </span>
             <span className="text-xs font-medium text-slate-500">logged today</span>
@@ -137,7 +137,7 @@ export const PunchWidget: React.FC = () => {
         </div>
 
         {/* Center Punch Timing Details */}
-        <div className="grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-3 sm:px-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 rounded-xl bg-slate-50 p-3 sm:px-6">
           <div>
             <span className="text-[11px] font-medium text-slate-400">First In</span>
             <p className="text-xs font-bold text-slate-800">{formatTime(today?.first_login)}</p>
@@ -149,12 +149,12 @@ export const PunchWidget: React.FC = () => {
         </div>
 
         {/* Right Punch Button */}
-        <div>
+        <div className="w-full md:w-auto">
           {isCheckedIn ? (
             <button
               onClick={() => punchOutMutation.mutate()}
               disabled={punchOutMutation.isPending}
-              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-rose-600 px-6 py-3.5 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 active:scale-98 disabled:opacity-50"
+              className="inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-rose-600 px-6 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 active:scale-98 disabled:opacity-50"
             >
               <LogOut className="h-4 w-4" />
               {punchOutMutation.isPending ? 'Logging Out...' : 'Clock Out (End Session)'}
@@ -163,7 +163,7 @@ export const PunchWidget: React.FC = () => {
             <button
               onClick={() => punchInMutation.mutate()}
               disabled={punchInMutation.isPending}
-              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-98 disabled:opacity-50"
+              className="inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 active:scale-98 disabled:opacity-50"
             >
               <LogIn className="h-4 w-4" />
               {punchInMutation.isPending ? 'Logging In...' : 'Clock In (Start Work)'}
@@ -173,18 +173,18 @@ export const PunchWidget: React.FC = () => {
       </div>
 
       {/* Privacy note */}
-      <div className="mt-4 flex items-center gap-1.5 text-[11px] text-slate-400">
-        <MapPin className="h-3 w-3" />
+      <div className="mt-4 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400">
+        <MapPin className="h-3 w-3 shrink-0" />
         <span>Location is only read momentarily during clock-in/out to verify presence. Continuous tracking is never enabled.</span>
       </div>
 
       {/* Today's Punch List */}
       {today?.punches && today.punches.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-3">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
             Today's Punch History
           </span>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
             {today.punches.map((p, idx) => (
               <span
                 key={idx}
@@ -195,9 +195,9 @@ export const PunchWidget: React.FC = () => {
                 }`}
               >
                 {p.log_type === 'IN' ? (
-                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
                 ) : (
-                  <AlertCircle className="h-3 w-3 text-slate-500" />
+                  <AlertCircle className="h-3 w-3 text-slate-500 shrink-0" />
                 )}
                 {p.log_type}: {formatTime(p.time)}
                 {p.source === 'Admin Correction' && (

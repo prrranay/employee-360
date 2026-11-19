@@ -34,19 +34,19 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* Brand Card */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-500/20 mb-3">
             <Building2 className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Employee360</h1>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Employee360</h1>
           <p className="text-xs text-indigo-200/70 mt-1">Enterprise Workforce & Attendance Intelligence</p>
         </div>
 
         {/* Login Form Card */}
-        <div className="rounded-3xl border border-white/10 bg-white/95 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-3xl border border-white/10 bg-white/95 p-5 sm:p-8 shadow-2xl backdrop-blur-xl">
           <h2 className="text-base font-bold text-slate-900">Sign in to your account</h2>
           <p className="text-xs text-slate-500 mt-0.5">Use your Frappe session credentials</p>
 
@@ -106,11 +106,11 @@ export const LoginPage: React.FC = () => {
           </form>
 
           {/* Quick Demo Switcher */}
-          <div className="mt-8 border-t border-slate-100 pt-6">
-            <span className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
+          <div className="mt-6 sm:mt-8 border-t border-slate-100 pt-5 sm:pt-6">
+            <span className="block text-[10px] sm:text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
               Quick Role Switch (Demo Mode)
             </span>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => setDemoUser('ceo@employee360.local')}
@@ -121,8 +121,8 @@ export const LoginPage: React.FC = () => {
                 }`}
               >
                 <ShieldCheck className="h-4 w-4 mb-1 text-indigo-600" />
-                <span className="text-[11px] font-semibold">CEO</span>
-                <span className="text-[9px] text-slate-400">Alex M.</span>
+                <span className="text-[10px] sm:text-[11px] font-semibold">CEO</span>
+                <span className="text-[8px] sm:text-[9px] text-slate-400">Alex M.</span>
               </button>
 
               <button
@@ -135,8 +135,8 @@ export const LoginPage: React.FC = () => {
                 }`}
               >
                 <UserCheck className="h-4 w-4 mb-1 text-amber-600" />
-                <span className="text-[11px] font-semibold">Manager</span>
-                <span className="text-[9px] text-slate-400">Sarah C.</span>
+                <span className="text-[10px] sm:text-[11px] font-semibold">Manager</span>
+                <span className="text-[8px] sm:text-[9px] text-slate-400">Sarah C.</span>
               </button>
 
               <button
@@ -149,19 +149,18 @@ export const LoginPage: React.FC = () => {
                 }`}
               >
                 <User className="h-4 w-4 mb-1 text-emerald-600" />
-                <span className="text-[11px] font-semibold">Employee</span>
-                <span className="text-[9px] text-slate-400">Elena R.</span>
+                <span className="text-[10px] sm:text-[11px] font-semibold">Employee</span>
+                <span className="text-[8px] sm:text-[9px] text-slate-400">Elena R.</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-xs text-indigo-200/50">
+        <p className="mt-4 sm:mt-6 text-center text-[11px] sm:text-xs text-indigo-200/50">
           MariaDB 10.11 • Frappe Framework Python Architecture
         </p>
       </div>
     </div>
   );
 };
-

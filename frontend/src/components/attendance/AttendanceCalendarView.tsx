@@ -196,24 +196,24 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
   }, [currentYear, currentMonth, startDayOfWeek, totalDaysInMonth]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Month Navigation & Stats Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
             <CalendarIcon className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900">
               {MONTH_NAMES[currentMonth]} {currentYear}
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] sm:text-xs text-slate-500">
               {activityData?.records?.length || 0} recorded attendance logs in this month
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
           <button
             type="button"
             onClick={handleTodayJump}
@@ -244,149 +244,151 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
       </div>
 
       {/* Monthly Summary Statistics Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
-          <div className="text-[11px] font-semibold text-emerald-800">Present</div>
-          <div className="text-lg font-bold text-emerald-700 mt-0.5">{monthStats.present} days</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-emerald-800">Present</div>
+          <div className="text-base sm:text-lg font-bold text-emerald-700 mt-0.5">{monthStats.present} days</div>
         </div>
-        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3">
-          <div className="text-[11px] font-semibold text-amber-800">Late</div>
-          <div className="text-lg font-bold text-amber-700 mt-0.5">{monthStats.late} days</div>
+        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-amber-800">Late</div>
+          <div className="text-base sm:text-lg font-bold text-amber-700 mt-0.5">{monthStats.late} days</div>
         </div>
-        <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
-          <div className="text-[11px] font-semibold text-blue-800">Half Day</div>
-          <div className="text-lg font-bold text-blue-700 mt-0.5">{monthStats.halfDay} days</div>
+        <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-blue-800">Half Day</div>
+          <div className="text-base sm:text-lg font-bold text-blue-700 mt-0.5">{monthStats.halfDay} days</div>
         </div>
-        <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-3">
-          <div className="text-[11px] font-semibold text-rose-800">Absent</div>
-          <div className="text-lg font-bold text-rose-700 mt-0.5">{monthStats.absent} days</div>
+        <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-rose-800">Absent</div>
+          <div className="text-base sm:text-lg font-bold text-rose-700 mt-0.5">{monthStats.absent} days</div>
         </div>
-        <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3">
-          <div className="text-[11px] font-semibold text-purple-800">On Leave</div>
-          <div className="text-lg font-bold text-purple-700 mt-0.5">{monthStats.onLeave} days</div>
+        <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-purple-800">On Leave</div>
+          <div className="text-base sm:text-lg font-bold text-purple-700 mt-0.5">{monthStats.onLeave} days</div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-[11px] font-semibold text-slate-700">Weekly Off</div>
-          <div className="text-lg font-bold text-slate-600 mt-0.5">{monthStats.weeklyOff} days</div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-slate-700">Weekly Off</div>
+          <div className="text-base sm:text-lg font-bold text-slate-600 mt-0.5">{monthStats.weeklyOff} days</div>
         </div>
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 col-span-2 sm:col-span-1">
-          <div className="text-[11px] font-semibold text-indigo-800">Avg Work Hours</div>
-          <div className="text-lg font-bold text-indigo-700 mt-0.5">
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-2.5 sm:p-3 col-span-2 sm:col-span-1">
+          <div className="text-[10px] sm:text-[11px] font-semibold text-indigo-800">Avg Work Hours</div>
+          <div className="text-base sm:text-lg font-bold text-indigo-700 mt-0.5">
             {formatSecondsToHours(monthStats.avgSeconds)}
           </div>
         </div>
       </div>
 
-      {/* Interactive Calendar Grid */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs">
+      {/* Interactive Calendar Grid with Horizontal Scroll on Mobile */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-3 sm:p-5 shadow-xs">
         {isLoading ? (
           <LoadingSkeleton rows={6} height="h-20" />
         ) : (
-          <div>
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-              {WEEKDAYS.map((day, idx) => (
-                <div
-                  key={day}
-                  className={`py-2 text-center text-xs font-bold uppercase tracking-wider ${
-                    idx === 0 || idx === 6 ? 'text-slate-400' : 'text-slate-600'
-                  }`}
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Days grid */}
-            <div className="grid grid-cols-7 gap-2">
-              {calendarCells.map((cell, idx) => {
-                if (cell.isPadding) {
-                  return (
-                    <div
-                      key={`pad-${idx}`}
-                      className="min-h-[105px] rounded-xl border border-dashed border-slate-100 bg-slate-50/40 p-2 opacity-40"
-                    />
-                  );
-                }
-
-                const rec = recordsMap.get(cell.dateStr);
-                const isSelected = selectedRecord?.activity_date === cell.dateStr;
-
-                return (
+          <div className="overflow-x-auto -mx-1 sm:mx-0 px-1 sm:px-0">
+            <div className="min-w-[640px]">
+              {/* Weekday headers */}
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {WEEKDAYS.map((day, idx) => (
                   <div
-                    key={cell.dateStr}
-                    onClick={() => rec && setSelectedRecord(rec)}
-                    className={`min-h-[105px] rounded-xl border p-2.5 transition flex flex-col justify-between ${
-                      cell.isToday
-                        ? 'border-indigo-400 bg-indigo-50/20 shadow-xs'
-                        : isSelected
-                        ? 'border-indigo-600 bg-indigo-50/30 ring-2 ring-indigo-500/20'
-                        : rec
-                        ? 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-xs cursor-pointer'
-                        : 'border-slate-100 bg-slate-50/50'
+                    key={day}
+                    className={`py-2 text-center text-xs font-bold uppercase tracking-wider ${
+                      idx === 0 || idx === 6 ? 'text-slate-400' : 'text-slate-600'
                     }`}
                   >
-                    {/* Top Row: Date & Today Pill */}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-xs font-bold ${
-                          cell.isToday
-                            ? 'flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white text-[11px]'
-                            : rec
-                            ? 'text-slate-800'
-                            : 'text-slate-400'
-                        }`}
-                      >
-                        {cell.dayNum}
-                      </span>
+                    {day}
+                  </div>
+                ))}
+              </div>
 
-                      {rec && rec.attendance_status && (
+              {/* Days grid */}
+              <div className="grid grid-cols-7 gap-2">
+                {calendarCells.map((cell, idx) => {
+                  if (cell.isPadding) {
+                    return (
+                      <div
+                        key={`pad-${idx}`}
+                        className="min-h-[105px] rounded-xl border border-dashed border-slate-100 bg-slate-50/40 p-2 opacity-40"
+                      />
+                    );
+                  }
+
+                  const rec = recordsMap.get(cell.dateStr);
+                  const isSelected = selectedRecord?.activity_date === cell.dateStr;
+
+                  return (
+                    <div
+                      key={cell.dateStr}
+                      onClick={() => rec && setSelectedRecord(rec)}
+                      className={`min-h-[105px] rounded-xl border p-2.5 transition flex flex-col justify-between ${
+                        cell.isToday
+                          ? 'border-indigo-400 bg-indigo-50/20 shadow-xs'
+                          : isSelected
+                          ? 'border-indigo-600 bg-indigo-50/30 ring-2 ring-indigo-500/20'
+                          : rec
+                          ? 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-xs cursor-pointer'
+                          : 'border-slate-100 bg-slate-50/50'
+                      }`}
+                    >
+                      {/* Top Row: Date & Today Pill */}
+                      <div className="flex items-center justify-between">
                         <span
-                          className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${getStatusColor(
-                            rec.attendance_status
-                          )}`}
+                          className={`text-xs font-bold ${
+                            cell.isToday
+                              ? 'flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white text-[11px]'
+                              : rec
+                              ? 'text-slate-800'
+                              : 'text-slate-400'
+                          }`}
                         >
-                          {rec.attendance_status}
+                          {cell.dayNum}
                         </span>
-                      )}
-                    </div>
 
-                    {/* Middle Info: Work Hours & Times */}
-                    {rec ? (
-                      <div className="mt-2 space-y-1">
-                        {rec.total_work_seconds > 0 ? (
-                          <>
-                            <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
-                              <Clock className="h-3 w-3 text-slate-400" />
-                              {formatSecondsToHours(rec.total_work_seconds)}
-                            </div>
-                            <div className="text-[10px] text-slate-500 truncate font-mono">
-                              {formatTime(rec.first_login)} – {formatTime(rec.last_logout)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-[10px] text-slate-400 italic">
-                            {rec.attendance_status === 'Weekly Off'
-                              ? 'Scheduled Off'
-                              : rec.attendance_status === 'On Leave'
-                              ? 'Approved Leave'
-                              : 'No punch logs'}
-                          </div>
+                        {rec && rec.attendance_status && (
+                          <span
+                            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${getStatusColor(
+                              rec.attendance_status
+                            )}`}
+                          >
+                            {rec.attendance_status}
+                          </span>
                         )}
                       </div>
-                    ) : (
-                      <div className="mt-2 text-[10px] text-slate-300 italic">—</div>
-                    )}
 
-                    {/* Bottom Status Indicator */}
-                    {rec && rec.total_sessions > 1 && (
-                      <div className="mt-1 text-[9px] text-slate-400">
-                        {rec.total_sessions} sessions
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {/* Middle Info: Work Hours & Times */}
+                      {rec ? (
+                        <div className="mt-2 space-y-1">
+                          {rec.total_work_seconds > 0 ? (
+                            <>
+                              <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                {formatSecondsToHours(rec.total_work_seconds)}
+                              </div>
+                              <div className="text-[10px] text-slate-500 truncate font-mono">
+                                {formatTime(rec.first_login)} – {formatTime(rec.last_logout)}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-[10px] text-slate-400 italic">
+                              {rec.attendance_status === 'Weekly Off'
+                                ? 'Scheduled Off'
+                                : rec.attendance_status === 'On Leave'
+                                ? 'Approved Leave'
+                                : 'No punch logs'}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[10px] text-slate-300 italic">—</div>
+                      )}
+
+                      {/* Bottom Status Indicator */}
+                      {rec && rec.total_sessions > 1 && (
+                        <div className="mt-1 text-[9px] text-slate-400">
+                          {rec.total_sessions} sessions
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -394,8 +396,8 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
 
       {/* Selected Day Inspector Panel */}
       {selectedRecord && (
-        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/60 via-white to-indigo-50/30 p-5 shadow-xs transition animate-fadeIn">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50/60 via-white to-indigo-50/30 p-4 sm:p-5 shadow-xs transition animate-fadeIn">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
                 <h4 className="text-sm font-bold text-slate-900">
@@ -403,7 +405,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 </h4>
                 <StatusBadge status={selectedRecord.attendance_status} size="sm" />
               </div>
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 pt-1">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-slate-600 pt-1">
                 <div>
                   <span className="text-slate-400">First In: </span>
                   <span className="font-semibold text-slate-800">
@@ -431,12 +433,12 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
               {onRequestCorrection && (
                 <button
                   type="button"
                   onClick={() => onRequestCorrection(selectedRecord.activity_date)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition"
                 >
                   <FileEdit className="h-3.5 w-3.5" />
                   Request Correction
@@ -446,6 +448,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
                 type="button"
                 onClick={() => setSelectedRecord(null)}
                 className="rounded-xl border border-slate-200 bg-white p-2 text-slate-400 hover:text-slate-700 transition"
+                aria-label="Close inspector"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -455,7 +458,7 @@ export const AttendanceCalendarView: React.FC<AttendanceCalendarViewProps> = ({
       )}
 
       {/* Legend Footer */}
-      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-slate-500 rounded-xl border border-slate-100 bg-slate-50/60 p-3 sm:px-4 sm:py-3">
         <span className="font-semibold text-slate-700">Status Legend:</span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-500" /> Present (On-time)

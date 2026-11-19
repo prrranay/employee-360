@@ -60,16 +60,16 @@ export const ManagerDashboardView: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header & Date */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Team Operations Dashboard</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Team Operations Dashboard</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Attendance monitoring and approvals for direct and indirect reports
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs">
+        <div className="flex items-center justify-between sm:justify-start gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs">
           <span className="text-xs font-semibold text-slate-500 pl-2">Filter Date:</span>
           <input
             type="date"
@@ -84,7 +84,7 @@ export const ManagerDashboardView: React.FC = () => {
       {loadingSummary ? (
         <LoadingSkeleton rows={1} height="h-24" />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <KpiCard
             title="Team Headcount"
             value={teamSummary?.team_size || 0}
@@ -123,7 +123,7 @@ export const ManagerDashboardView: React.FC = () => {
       {/* Main Charts & Pending Approvals */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Team Attendance Trajectory */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900 mb-1">14-Day Team Attendance Trend</h3>
           <p className="text-xs text-slate-500 mb-4">Daily attendance status distribution</p>
           {loadingTrends ? (
@@ -134,7 +134,7 @@ export const ManagerDashboardView: React.FC = () => {
         </div>
 
         {/* Pending Leave Approvals Drawer */}
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs flex flex-col justify-between">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-slate-900">Pending Leave Requests</h3>
@@ -193,7 +193,7 @@ export const ManagerDashboardView: React.FC = () => {
       </div>
 
       {/* Team Exceptions List */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Team Attendance Exceptions</h3>
@@ -208,30 +208,30 @@ export const ManagerDashboardView: React.FC = () => {
             No attendance exceptions recorded for your team on this date.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full text-left text-xs min-w-[550px]">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase">
-                  <th className="py-2.5">Employee</th>
-                  <th className="py-2.5">Department</th>
-                  <th className="py-2.5">Exception Type</th>
-                  <th className="py-2.5">Date</th>
-                  <th className="py-2.5">Status</th>
+                  <th className="py-2.5 px-4 sm:px-0">Employee</th>
+                  <th className="py-2.5 px-4 sm:px-0">Department</th>
+                  <th className="py-2.5 px-4 sm:px-0">Exception Type</th>
+                  <th className="py-2.5 px-4 sm:px-0">Date</th>
+                  <th className="py-2.5 px-4 sm:px-0">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {exceptions.records.map((exc) => (
                   <tr key={exc.name} className="hover:bg-slate-50/50">
-                    <td className="py-2.5 font-medium text-slate-900">{exc.employee_name || exc.employee}</td>
-                    <td className="py-2.5 text-slate-600">{exc.department || '—'}</td>
-                    <td className="py-2.5">
+                    <td className="py-2.5 px-4 sm:px-0 font-medium text-slate-900">{exc.employee_name || exc.employee}</td>
+                    <td className="py-2.5 px-4 sm:px-0 text-slate-600">{exc.department || '—'}</td>
+                    <td className="py-2.5 px-4 sm:px-0">
                       <span className="inline-flex items-center gap-1 text-amber-700 font-medium">
                         <AlertTriangle className="h-3.5 w-3.5" />
                         {exc.exception_type}
                       </span>
                     </td>
-                    <td className="py-2.5 text-slate-500">{formatDate(exc.activity_date)}</td>
-                    <td className="py-2.5">
+                    <td className="py-2.5 px-4 sm:px-0 text-slate-500 whitespace-nowrap">{formatDate(exc.activity_date)}</td>
+                    <td className="py-2.5 px-4 sm:px-0">
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
                         {exc.status}
                       </span>

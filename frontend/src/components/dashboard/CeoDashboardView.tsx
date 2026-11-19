@@ -91,16 +91,16 @@ export const CeoDashboardView: React.FC = () => {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Top Banner & Date Selector */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Executive Workforce Dashboard</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Executive Workforce Dashboard</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Real-time analytics across 30,000 employees and 10.95M historical records
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs">
+        <div className="flex items-center justify-between sm:justify-start gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs">
           <span className="text-xs font-semibold text-slate-500 pl-2">Filter Date:</span>
           <input
             type="date"
@@ -115,7 +115,7 @@ export const CeoDashboardView: React.FC = () => {
       {loadingSummary ? (
         <LoadingSkeleton rows={2} height="h-24" />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <KpiCard
             title="Total Workforce"
             value={summary?.total_employees.toLocaleString() || '30,000'}
@@ -186,7 +186,7 @@ export const CeoDashboardView: React.FC = () => {
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Attendance Trend Chart */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-900">{trendDays}-Day Attendance Trajectory</h3>
@@ -218,7 +218,7 @@ export const CeoDashboardView: React.FC = () => {
         </div>
 
         {/* Status Distribution Donut */}
-        <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900">Attendance Distribution</h3>
           <p className="text-xs text-slate-500 mb-2">Proportional status breakdown</p>
           {loadingSummary ? (
@@ -230,7 +230,7 @@ export const CeoDashboardView: React.FC = () => {
       </div>
 
       {/* Department Analytics Section */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Department-wise Analytics</h3>
@@ -241,10 +241,10 @@ export const CeoDashboardView: React.FC = () => {
         {loadingDepts ? (
           <LoadingSkeleton rows={5} height="h-10" />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 items-center">
             <DepartmentBreakdownChart data={departments || []} height={320} />
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="w-full text-left text-xs min-w-[320px]">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase">
                     <th className="py-2.5">Department</th>
@@ -270,7 +270,7 @@ export const CeoDashboardView: React.FC = () => {
       </div>
 
       {/* MANAGER PERFORMANCE & TEAM HEALTH TABLE */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs space-y-4">
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -282,16 +282,16 @@ export const CeoDashboardView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
             {/* Team Health Filter Pills */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs overflow-x-auto">
               <button
                 type="button"
                 onClick={() => {
                   setHealthFilter('ALL');
                   setManagerPage(1);
                 }}
-                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition shrink-0 ${
                   healthFilter === 'ALL'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -305,7 +305,7 @@ export const CeoDashboardView: React.FC = () => {
                   setHealthFilter('Excellent');
                   setManagerPage(1);
                 }}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition shrink-0 ${
                   healthFilter === 'Excellent'
                     ? 'bg-white text-emerald-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -320,7 +320,7 @@ export const CeoDashboardView: React.FC = () => {
                   setHealthFilter('Good');
                   setManagerPage(1);
                 }}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition shrink-0 ${
                   healthFilter === 'Good'
                     ? 'bg-white text-indigo-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -335,7 +335,7 @@ export const CeoDashboardView: React.FC = () => {
                   setHealthFilter('Needs Review');
                   setManagerPage(1);
                 }}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition shrink-0 ${
                   healthFilter === 'Needs Review'
                     ? 'bg-white text-amber-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -371,8 +371,8 @@ export const CeoDashboardView: React.FC = () => {
           </div>
         ) : (
           <div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="w-full text-left text-xs min-w-[700px]">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-500 font-semibold uppercase tracking-wider">
                     <th className="py-3 px-4">Manager</th>
@@ -404,7 +404,7 @@ export const CeoDashboardView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="w-20 sm:w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                             <div
                               className={`h-full rounded-full ${
                                 m.attendance_rate >= 92
@@ -419,14 +419,14 @@ export const CeoDashboardView: React.FC = () => {
                           <span className="font-bold text-slate-900">{m.attendance_rate}%</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
                         <span className="text-emerald-600 font-semibold">{m.present_count}</span>
                         <span className="text-slate-300 mx-1">/</span>
                         <span className="text-amber-600 font-semibold">{m.late_count}</span>
                         <span className="text-slate-300 mx-1">/</span>
                         <span className="text-rose-600 font-semibold">{m.absent_count}</span>
                       </td>
-                      <td className="py-3 px-4 text-center font-medium text-slate-700">
+                      <td className="py-3 px-4 text-center font-medium text-slate-700 whitespace-nowrap">
                         {m.avg_work_formatted}
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -442,7 +442,7 @@ export const CeoDashboardView: React.FC = () => {
                           {m.performance_status}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => navigate(`/team?manager_id=${m.manager_id}`)}
                           className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:text-indigo-800"
@@ -469,4 +469,3 @@ export const CeoDashboardView: React.FC = () => {
     </div>
   );
 };
-

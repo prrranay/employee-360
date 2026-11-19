@@ -39,17 +39,17 @@ export const MyAttendancePage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">My Attendance Portal</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">My Attendance Portal</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Clock in/out, view daily logs, and submit correction requests
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* View Toggle: Calendar (Default) vs List */}
           <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs">
             <button
@@ -83,10 +83,10 @@ export const MyAttendancePage: React.FC = () => {
               setSelectedCorrectionDate('');
               setCorrectionModalOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
           >
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            Request Correction
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>Request Correction</span>
           </button>
         </div>
       </div>
@@ -104,12 +104,12 @@ export const MyAttendancePage: React.FC = () => {
           }}
         />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <span>From:</span>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-slate-200/90 bg-white p-3 sm:p-4 shadow-xs">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 flex-1 sm:flex-initial">
+                <span className="shrink-0">From:</span>
                 <input
                   type="date"
                   value={fromDate}
@@ -117,11 +117,11 @@ export const MyAttendancePage: React.FC = () => {
                     setFromDate(e.target.value);
                     setPage(1);
                   }}
-                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
+                  className="w-full sm:w-auto rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
                 />
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-600">
-                <span>To:</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-600 flex-1 sm:flex-initial">
+                <span className="shrink-0">To:</span>
                 <input
                   type="date"
                   value={toDate}
@@ -129,7 +129,7 @@ export const MyAttendancePage: React.FC = () => {
                     setToDate(e.target.value);
                     setPage(1);
                   }}
-                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
+                  className="w-full sm:w-auto rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
                 />
               </div>
             </div>
@@ -141,7 +141,7 @@ export const MyAttendancePage: React.FC = () => {
                   setStatusFilter(e.target.value);
                   setPage(1);
                 }}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none"
+                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none"
               >
                 <option value="">All Attendance Statuses</option>
                 <option value="Present">Present</option>
@@ -166,30 +166,30 @@ export const MyAttendancePage: React.FC = () => {
             ) : (
               <div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs min-w-[600px]">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-500 font-semibold uppercase tracking-wider">
-                        <th className="py-3 px-6">Date</th>
-                        <th className="py-3 px-6">Status</th>
-                        <th className="py-3 px-6">First In</th>
-                        <th className="py-3 px-6">Last Out</th>
-                        <th className="py-3 px-6">Work Duration</th>
-                        <th className="py-3 px-6">Sessions</th>
+                        <th className="py-3 px-4 sm:px-6">Date</th>
+                        <th className="py-3 px-4 sm:px-6">Status</th>
+                        <th className="py-3 px-4 sm:px-6">First In</th>
+                        <th className="py-3 px-4 sm:px-6">Last Out</th>
+                        <th className="py-3 px-4 sm:px-6">Work Duration</th>
+                        <th className="py-3 px-4 sm:px-6">Sessions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {activityData.records.map((log) => (
                         <tr key={log.name} className="hover:bg-slate-50/50">
-                          <td className="py-3 px-6 font-medium text-slate-900">{formatDate(log.activity_date)}</td>
-                          <td className="py-3 px-6">
+                          <td className="py-3 px-4 sm:px-6 font-medium text-slate-900 whitespace-nowrap">{formatDate(log.activity_date)}</td>
+                          <td className="py-3 px-4 sm:px-6 whitespace-nowrap">
                             <StatusBadge status={log.attendance_status} size="sm" />
                           </td>
-                          <td className="py-3 px-6 text-slate-600">{formatTime(log.first_login)}</td>
-                          <td className="py-3 px-6 text-slate-600">{formatTime(log.last_logout)}</td>
-                          <td className="py-3 px-6 font-semibold text-slate-800">
+                          <td className="py-3 px-4 sm:px-6 text-slate-600 whitespace-nowrap">{formatTime(log.first_login)}</td>
+                          <td className="py-3 px-4 sm:px-6 text-slate-600 whitespace-nowrap">{formatTime(log.last_logout)}</td>
+                          <td className="py-3 px-4 sm:px-6 font-semibold text-slate-800 whitespace-nowrap">
                             {formatSecondsToHours(log.total_work_seconds)}
                           </td>
-                          <td className="py-3 px-6 text-slate-600">{log.total_sessions}</td>
+                          <td className="py-3 px-4 sm:px-6 text-slate-600 whitespace-nowrap">{log.total_sessions}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -48,10 +48,10 @@ export const AttendanceExceptionsPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Attendance Exceptions & Regularization</h2>
+        <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Attendance Exceptions & Regularization</h2>
         <p className="text-xs text-slate-500 mt-0.5">
           {isCeo
             ? 'Company-wide anomaly detection and employee attendance regularization requests'
@@ -60,10 +60,10 @@ export const AttendanceExceptionsPage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-2 text-xs text-slate-600">
-            <span>Date:</span>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-slate-200/90 bg-white p-3 sm:p-4 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 flex-1 sm:flex-initial">
+            <span className="shrink-0">Date:</span>
             <input
               type="date"
               value={selectedDate}
@@ -71,7 +71,7 @@ export const AttendanceExceptionsPage: React.FC = () => {
                 setSelectedDate(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
+              className="w-full sm:w-auto rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 focus:outline-none"
             />
           </div>
           {selectedDate && (
@@ -91,7 +91,7 @@ export const AttendanceExceptionsPage: React.FC = () => {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none"
+            className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:outline-none"
           >
             <option value="">All Statuses</option>
             <option value="Open">Open</option>
@@ -114,36 +114,36 @@ export const AttendanceExceptionsPage: React.FC = () => {
         ) : (
           <div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[750px]">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-500 font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-6">Employee</th>
-                    <th className="py-3 px-6">Department</th>
-                    <th className="py-3 px-6">Date</th>
-                    <th className="py-3 px-6">Exception Type</th>
-                    <th className="py-3 px-6">Description</th>
-                    <th className="py-3 px-6">Assigned Manager</th>
-                    <th className="py-3 px-6">Status</th>
-                    {(isManager || isCeo) && <th className="py-3 px-6 text-right">Actions</th>}
+                    <th className="py-3 px-4 sm:px-6">Employee</th>
+                    <th className="py-3 px-4 sm:px-6">Department</th>
+                    <th className="py-3 px-4 sm:px-6">Date</th>
+                    <th className="py-3 px-4 sm:px-6">Exception Type</th>
+                    <th className="py-3 px-4 sm:px-6">Description</th>
+                    <th className="py-3 px-4 sm:px-6">Assigned Manager</th>
+                    <th className="py-3 px-4 sm:px-6">Status</th>
+                    {(isManager || isCeo) && <th className="py-3 px-4 sm:px-6 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {exceptions.records.map((exc) => (
                     <tr key={exc.name} className="hover:bg-slate-50/50">
-                      <td className="py-3.5 px-6 font-semibold text-slate-900">
+                      <td className="py-3.5 px-4 sm:px-6 font-semibold text-slate-900 whitespace-nowrap">
                         {exc.employee_name || exc.employee}
                       </td>
-                      <td className="py-3.5 px-6 text-slate-600">{exc.department || '—'}</td>
-                      <td className="py-3.5 px-6 text-slate-500">{formatDate(exc.activity_date)}</td>
-                      <td className="py-3.5 px-6">
+                      <td className="py-3.5 px-4 sm:px-6 text-slate-600 whitespace-nowrap">{exc.department || '—'}</td>
+                      <td className="py-3.5 px-4 sm:px-6 text-slate-500 whitespace-nowrap">{formatDate(exc.activity_date)}</td>
+                      <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700">
                           <AlertTriangle className="h-3.5 w-3.5" />
                           {exc.exception_type}
                         </span>
                       </td>
-                      <td className="py-3.5 px-6 text-slate-600 max-w-xs truncate">{exc.description || '—'}</td>
-                      <td className="py-3.5 px-6 text-slate-600">{exc.manager_name || exc.assigned_manager || '—'}</td>
-                      <td className="py-3.5 px-6">
+                      <td className="py-3.5 px-4 sm:px-6 text-slate-600 max-w-xs truncate">{exc.description || '—'}</td>
+                      <td className="py-3.5 px-4 sm:px-6 text-slate-600 whitespace-nowrap">{exc.manager_name || exc.assigned_manager || '—'}</td>
+                      <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap">
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
                             exc.status === 'Resolved'
@@ -157,7 +157,7 @@ export const AttendanceExceptionsPage: React.FC = () => {
                         </span>
                       </td>
                       {(isManager || isCeo) && (
-                        <td className="py-3.5 px-6 text-right">
+                        <td className="py-3.5 px-4 sm:px-6 text-right whitespace-nowrap">
                           {exc.status !== 'Resolved' && exc.status !== 'Ignored' ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
