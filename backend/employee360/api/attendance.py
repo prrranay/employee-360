@@ -27,9 +27,30 @@ def _parse_time_val(time_val) -> Optional[datetime.time]:
         h = int(parts[0])
         m = int(parts[1]) if len(parts) > 1 else 0
         sec = int(parts[2].split(".")[0]) if len(parts) > 2 else 0
+        if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= sec <= 59):
+            frappe.throw(
+                _("Invalid time value '{0}'. Hours must be 0-23, minutes and seconds 0-59").format(time_val),
+                frappe.ValidationError
+            )
         return datetime.time(h, m, sec)
-    except Exception:
-        return datetime.time(9, 0)
+    except (ValueError, IndexError):
+        frappe.throw(
+            _("Invalid time format '{0}'. Expected HH:MM:SS format").format(time_val),
+            frappe.ValidationError
+        )
+
+
+def _get_trusted_client_ip(supplied_ip: Optional[str] = None) -> str:
+    """Derives client IP from trusted server request context, rejecting client spoofing.
+    Supplied IP is only respected in simulated test execution when frappe.flags.in_test is True.
+    """
+    if getattr(frappe.flags, "in_test", False) and supplied_ip:
+        return supplied_ip
+    if hasattr(frappe.local, "request_ip") and frappe.local.request_ip:
+        return frappe.local.request_ip
+    if hasattr(frappe, "request") and frappe.request and hasattr(frappe.request, "remote_addr"):
+        return frappe.request.remote_addr or "127.0.0.1"
+    return "127.0.0.1"
 
 
 def _get_active_employee_or_throw():
@@ -57,9 +78,10 @@ def check_in(
 ):
     """
     Records a live IN punch for the authenticated employee with concurrency protection.
-    Uses row-level locking on tabEmployee and tabEmployee Checkin to serialize concurrent punch attempts.
+    IP address is derived strictly from trusted server request context, rejecting client spoofing.
     """
     emp_id = _get_active_employee_or_throw()
+    trusted_ip = _get_trusted_client_ip(ip_address)
 
     try:
         # Row-level lock on the Employee record to serialize concurrent punch attempts
@@ -101,7 +123,7 @@ def check_in(
                     frappe.DuplicateEntryError
                 )
 
-        # Create Checkin Document (runs validation including timestamp order and authorization)
+        # Create Checkin Document (on_update triggers single canonical summary recalculation)
         checkin = frappe.get_doc({
             "doctype": "Employee Checkin",
             "employee": emp_id,
@@ -109,15 +131,15 @@ def check_in(
             "log_type": "IN",
             "source": "Web",
             "device_info": device_info or "Web Portal",
-            "ip_address": ip_address,
+            "ip_address": trusted_ip,
             "latitude": latitude,
             "longitude": longitude,
             "gps_accuracy": gps_accuracy
         })
         checkin.insert()
 
-        recalculate_daily_summary(emp_id, today)
         frappe.db.commit()
+        frappe.cache().delete_keys("employee360:*")
     except Exception:
         frappe.db.rollback()
         raise
@@ -135,9 +157,11 @@ def check_out(
 ):
     """
     Records a live OUT punch for the authenticated employee with concurrency protection.
+    IP address is derived strictly from trusted server request context, rejecting client spoofing.
     Requires an active open IN session.
     """
     emp_id = _get_active_employee_or_throw()
+    trusted_ip = _get_trusted_client_ip(ip_address)
 
     try:
         # Row-level lock on the Employee record
@@ -185,15 +209,15 @@ def check_out(
             "log_type": "OUT",
             "source": "Web",
             "device_info": device_info or "Web Portal",
-            "ip_address": ip_address,
+            "ip_address": trusted_ip,
             "latitude": latitude,
             "longitude": longitude,
             "gps_accuracy": gps_accuracy
         })
         checkin.insert()
 
-        recalculate_daily_summary(emp_id, today)
         frappe.db.commit()
+        frappe.cache().delete_keys("employee360:*")
     except Exception:
         frappe.db.rollback()
         raise
@@ -211,7 +235,8 @@ def get_today_attendance():
         return None
 
     today = getdate(nowdate())
-    recalculate_daily_summary(emp_id, today)
+    if not frappe.db.exists("Employee Activity Log", {"employee": emp_id, "activity_date": today}):
+        recalculate_daily_summary(emp_id, today)
 
     log = frappe.db.get_value(
         "Employee Activity Log",
@@ -434,6 +459,16 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
         req_status = exc.get("requested_status") or "Present"
 
         parsed_in = _parse_time_val(exc.get("requested_in_time"))
+        parsed_out = _parse_time_val(exc.get("requested_out_time"))
+
+        # Strict chronological sequence validation before creating any punches
+        if parsed_in and parsed_out:
+            if parsed_out <= parsed_in:
+                frappe.throw(
+                    _("Chronological sequence error: Requested OUT time ({0}) must be strictly after requested IN time ({1})").format(parsed_out, parsed_in),
+                    frappe.ValidationError
+                )
+
         if parsed_in:
             in_dt = datetime.datetime.combine(activity_date, parsed_in)
             existing_in = frappe.db.sql(
@@ -453,7 +488,6 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
                 in_punch.flags.ignore_permissions = True
                 in_punch.insert()
 
-        parsed_out = _parse_time_val(exc.get("requested_out_time"))
         if parsed_out:
             out_dt = datetime.datetime.combine(activity_date, parsed_out)
             existing_out = frappe.db.sql(
@@ -517,6 +551,7 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
 
         recalculate_daily_summary(target_emp, activity_date)
         frappe.db.commit()
+        frappe.cache().delete_keys("employee360:*")
     finally:
         frappe.flags.in_regularization_approval = False
 
@@ -591,6 +626,7 @@ def reject_attendance_exception(exception_id: str, comments: Optional[str] = Non
         )
 
     frappe.db.commit()
+    frappe.cache().delete_keys("employee360:*")
 
     return {
         "message": "Attendance exception request rejected",

@@ -512,7 +512,7 @@ def stream_activity_log_batches(
                         emp_id,
                         p_time,
                         log_type,
-                        "Web",
+                        "Seed",
                         None,
                         "Seeded historical attendance",
                         None,

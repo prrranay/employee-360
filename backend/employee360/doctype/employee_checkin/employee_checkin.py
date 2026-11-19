@@ -88,7 +88,38 @@ class EmployeeCheckin(Document):
         self.employee = linked_employee
 
     def enforce_server_timestamp(self):
-        # Force server-generated timestamps for live events if missing
+        # 1. Allow programmatic timestamps during seed, regularization, or automated test fixtures
+        if (
+            getattr(frappe.flags, "in_seed", False)
+            or getattr(frappe.flags, "in_regularization_approval", False)
+            or getattr(frappe.flags, "in_test", False)
+        ):
+            if not self.time:
+                self.time = now_datetime()
+            return
+
+        # 2. Reject future timestamps first
+        if self.time:
+            current_time = get_datetime(self.time)
+            now_time = now_datetime()
+            if current_time > now_time + datetime.timedelta(seconds=10):
+                frappe.throw(
+                    _("Invalid timestamp: Cannot record attendance events in the future ({0})").format(current_time),
+                    frappe.ValidationError
+                )
+
+            # 3. For live employee punches: forbid custom backdating beyond 60s clock skew
+            user = frappe.session.user
+            roles = frappe.get_roles(user)
+            if "System Manager" not in roles and "Administrator" not in roles and user != "Administrator":
+                delta_sec = abs((now_time - current_time).total_seconds())
+                if delta_sec > 60:
+                    frappe.throw(
+                        _("Unauthorized: Attendance timestamps must be server-generated. Custom backdated punches are forbidden."),
+                        frappe.PermissionError
+                    )
+
+        # Force server timestamp if not provided
         if not self.time:
             self.time = now_datetime()
 

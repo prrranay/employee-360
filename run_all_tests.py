@@ -29,7 +29,31 @@ FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
 SCRIPTS_DIR = os.path.join(ROOT_DIR, "scripts")
 
 
-def run_clean_test_records(force: bool = False):
+def is_frappe_installed() -> bool:
+    """Checks if Frappe is importable in the current Python interpreter."""
+    try:
+        import frappe
+        return True
+    except ImportError:
+        return False
+
+
+def is_docker_frappe_running() -> bool:
+    """Checks if the employee360_frappe Docker container is running and responsive."""
+    try:
+        res = subprocess.run(
+            ["docker", "ps", "--filter", "name=employee360_frappe", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=5
+        )
+        return "employee360_frappe" in res.stdout
+    except Exception:
+        return False
+
+
+def run_clean_test_records(force: bool = False, use_docker: bool = False):
     """
     Safely purges identifiable test fixtures if explicitly allowed.
     Never runs destructive operations against non-disposable databases.
@@ -48,8 +72,29 @@ def run_clean_test_records(force: bool = False):
     print("[*] Running safe fixture cleanup for TEST-* records...")
     env = os.environ.copy()
     env["ALLOW_TEST_CLEANUP"] = "1"
+
+    if use_docker:
+        cmd = [
+            "docker", "exec",
+            "-e", "ALLOW_TEST_CLEANUP=1",
+            "-w", "/home/frappe/frappe-bench/sites",
+            "employee360_frappe",
+            "/home/frappe/frappe-bench/env/bin/python",
+            "-c",
+            "import frappe; frappe.init(site='employee360.localhost'); frappe.connect(); "
+            "frappe.db.sql(\"DELETE FROM `tabEmployee Activity Log` WHERE name LIKE 'TEST-%' OR employee LIKE 'TEST-%'\"); "
+            "frappe.db.sql(\"DELETE FROM `tabEmployee Checkin` WHERE name LIKE 'TEST-%' OR employee LIKE 'TEST-%' OR device_info LIKE '%Test%'\"); "
+            "frappe.db.sql(\"DELETE FROM `tabAttendance Exception` WHERE name LIKE 'TEST-%' OR employee LIKE 'TEST-%' OR description LIKE '%Test%'\"); "
+            "frappe.db.sql(\"DELETE FROM `tabAttendance Correction Request` WHERE name LIKE 'TEST-%' OR employee LIKE 'TEST-%'\"); "
+            "frappe.db.sql(\"DELETE FROM `tabLeave Application` WHERE name LIKE 'LEAV-TEST-%' OR name LIKE 'TEST-%' OR employee LIKE 'TEST-%'\"); "
+            "frappe.db.sql(\"DELETE FROM `tabEmployee` WHERE name LIKE 'TEST-%'\"); "
+            "frappe.db.commit(); print('Fixtures cleaned')"
+        ]
+    else:
+        cmd = [sys.executable, clean_script, "--force-cleanup"]
+
     res = subprocess.run(
-        [sys.executable, clean_script, "--force-cleanup"],
+        cmd,
         cwd=ROOT_DIR,
         capture_output=True,
         text=True,
@@ -110,9 +155,20 @@ def run_suite(args):
     total_failed = 0
     results_summary = []
 
+    has_local_frappe = is_frappe_installed()
+    has_docker = is_docker_frappe_running()
+    use_docker = not has_local_frappe and has_docker
+
+    if use_docker:
+        print("[i] Local Frappe not detected; routing backend suites through Docker ('employee360_frappe').")
+    elif has_local_frappe:
+        print("[i] Using local Frappe environment.")
+    else:
+        print("[!] Warning: Neither local Frappe nor Docker container 'employee360_frappe' is detected.")
+
     # Optional initial fixture cleanup if explicitly enabled
     if args.cleanup:
-        run_clean_test_records(force=True)
+        run_clean_test_records(force=True, use_docker=use_docker)
 
     # ─────────────────────────────────────────────────────────────────────────
     # 1. Python Backend Suites
@@ -141,8 +197,27 @@ def run_suite(args):
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{BACKEND_DIR}{os.pathsep}{ROOT_DIR}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
+        if use_docker:
+            rel = os.path.relpath(script_path, ROOT_DIR).replace("\\", "/")
+            if rel.startswith("backend/"):
+                container_script = "/home/frappe/frappe-bench/apps/employee360/" + rel[len("backend/"):]
+            elif rel.startswith("scripts/"):
+                container_script = "/home/frappe/frappe-bench/apps/employee360/scripts/" + os.path.basename(rel)
+            else:
+                container_script = rel
+
+            cmd = [
+                "docker", "exec",
+                "-w", "/home/frappe/frappe-bench/sites",
+                "employee360_frappe",
+                "/home/frappe/frappe-bench/env/bin/python",
+                container_script
+            ]
+        else:
+            cmd = [sys.executable, script_path]
+
         res = subprocess.run(
-            [sys.executable, script_path],
+            cmd,
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
@@ -239,8 +314,19 @@ def run_suite(args):
             env = os.environ.copy()
             env["PYTHONPATH"] = f"{BACKEND_DIR}{os.pathsep}{ROOT_DIR}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
+            if use_docker:
+                cmd_val = [
+                    "docker", "exec",
+                    "-w", "/home/frappe/frappe-bench/sites",
+                    "employee360_frappe",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "/home/frappe/frappe-bench/apps/employee360/employee360/seed/validator.py"
+                ]
+            else:
+                cmd_val = [sys.executable, validator_script]
+
             res_val = subprocess.run(
-                [sys.executable, validator_script],
+                cmd_val,
                 cwd=ROOT_DIR,
                 capture_output=True,
                 text=True,
@@ -265,7 +351,7 @@ def run_suite(args):
 
     # Optional post-run cleanup
     if args.cleanup:
-        run_clean_test_records(force=True)
+        run_clean_test_records(force=True, use_docker=use_docker)
 
     total_dur = time.time() - t_start
     print("\n" + "=" * 80)

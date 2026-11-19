@@ -74,19 +74,25 @@ def get_team_dashboard_summary(
     else:
         target_emp = get_current_employee_id()
 
+    date_val = getdate(target_date) if target_date else getdate(nowdate())
+
+    cache = frappe.cache()
+    cache_key = f"employee360:mgr:summary:{target_emp}:{date_val}:{int(include_indirect)}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
+
     team_ids = get_manager_team_ids(target_emp, include_indirect=bool(int(include_indirect)))
 
     if not team_ids:
         return {
-            "date": str(target_date or nowdate()),
+            "date": str(date_val),
             "team_size": 0,
             "present": 0, "late": 0, "half_day": 0,
             "absent": 0, "on_leave": 0, "weekly_off": 0,
             "missing_checkout": 0, "attendance_rate": 0.0,
             "avg_work_formatted": "0h 0m"
         }
-
-    date_val = getdate(target_date) if target_date else getdate(nowdate())
 
     query = """
     SELECT
@@ -127,7 +133,7 @@ def get_team_dashboard_summary(
     )
     avg_sec = int(avg_row[0]["avg_sec"] or 0) if avg_row else 0
 
-    return {
+    result = {
         "date": str(date_val),
         "team_size": team_size,
         "present": present,
@@ -141,6 +147,8 @@ def get_team_dashboard_summary(
         "avg_work_seconds": avg_sec,
         "avg_work_formatted": f"{avg_sec // 3600}h {(avg_sec % 3600) // 60}m"
     }
+    cache.set_value(cache_key, result, expires_in_sec=300)
+    return result
 
 
 @frappe.whitelist()
@@ -153,20 +161,27 @@ def get_team_attendance_trend(
     """Returns daily attendance trends for the manager's team."""
     require_manager()
     current_emp = get_current_employee_id()
-    team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
-
-    if not team_ids:
-        return []
 
     if to_date:
         end_date = getdate(to_date)
     else:
         end_date = getdate(nowdate())
 
+    num_days = max(7, min(60, int(days)))
     if from_date:
         start_date = getdate(from_date)
     else:
-        start_date = end_date - datetime.timedelta(days=max(7, min(60, int(days))))
+        start_date = end_date - datetime.timedelta(days=num_days)
+
+    cache = frappe.cache()
+    cache_key = f"employee360:mgr:trend:{current_emp}:{start_date}:{end_date}:{num_days}:{int(include_indirect)}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
+
+    team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
+    if not team_ids:
+        return []
 
     query = """
     SELECT
@@ -189,6 +204,7 @@ def get_team_attendance_trend(
         {"team_ids": tuple(team_ids), "start_date": start_date, "end_date": end_date},
         as_dict=True
     )
+    cache.set_value(cache_key, trend, expires_in_sec=600)
     return trend
 
 
@@ -362,6 +378,7 @@ def approve_leave_application(leave_id: str, comments: Optional[str] = None):
         curr += datetime.timedelta(days=1)
 
     frappe.db.commit()
+    frappe.cache().delete_keys("employee360:*")
     return {"message": "Leave application approved successfully", "leave_id": leave_doc.name, "status": "Approved"}
 
 
@@ -399,6 +416,7 @@ def reject_leave_application(leave_id: str, comments: Optional[str] = None):
     leave_doc.save(ignore_permissions=True)
 
     frappe.db.commit()
+    frappe.cache().delete_keys("employee360:*")
     return {"message": "Leave application rejected", "leave_id": leave_doc.name, "status": "Rejected"}
 
 
@@ -411,10 +429,6 @@ def get_team_leave_calendar(
     """Returns team leave schedule calendar events for the manager's hierarchy."""
     require_manager()
     current_emp = get_current_employee_id()
-    team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
-
-    if not team_ids:
-        return []
 
     if to_date:
         end_date = getdate(to_date)
@@ -425,6 +439,16 @@ def get_team_leave_calendar(
         start_date = getdate(from_date)
     else:
         start_date = getdate(nowdate()) - datetime.timedelta(days=30)
+
+    cache = frappe.cache()
+    cache_key = f"employee360:mgr:calendar:{current_emp}:{start_date}:{end_date}:{int(include_indirect)}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
+
+    team_ids = get_manager_team_ids(current_emp, include_indirect=bool(int(include_indirect)))
+    if not team_ids:
+        return []
 
     query = """
     SELECT
@@ -449,4 +473,5 @@ def get_team_leave_calendar(
         {"team_ids": tuple(team_ids), "start_date": start_date, "end_date": end_date},
         as_dict=True
     )
+    cache.set_value(cache_key, events, expires_in_sec=300)
     return events

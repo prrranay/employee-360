@@ -45,6 +45,14 @@ except ImportError:
 def setUpModule():
     if frappe is None:
         raise unittest.SkipTest("Frappe Framework is not installed in the current environment.")
+    site = os.environ.get("FRAPPE_SITE", os.environ.get("FRAPPE_SITE_NAME", "employee360.localhost"))
+    sites_path = os.environ.get("SITES_PATH", "/home/frappe/frappe-bench/sites" if os.path.exists("/home/frappe/frappe-bench/sites") else None)
+    if not getattr(frappe, "db", None) or not frappe.db:
+        frappe.init(site=site, sites_path=sites_path)
+        frappe.connect()
+    frappe.flags.in_test = True
+    if not getattr(frappe.local, "session", None):
+        frappe.local.session = frappe._dict(user="Administrator")
 
 # Ensure site is initialized for direct ORM access
 if frappe is not None:
@@ -94,6 +102,7 @@ class TestAuthenticationSecurityAttendance(unittest.TestCase):
             frappe.connect()
         except Exception:
             pass
+        frappe.flags.in_test = True
 
         cls.ceo_user = "ceo@employee360.local"
         cls.ceo_emp_id = "EMP-00001"
@@ -123,6 +132,7 @@ class TestAuthenticationSecurityAttendance(unittest.TestCase):
             frappe.connect()
         except Exception:
             pass
+        frappe.flags.in_test = True
         frappe.set_user("Administrator")
         self._clear_test_records()
 

@@ -16,6 +16,14 @@ except ImportError:
 def setUpModule():
     if frappe is None:
         raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
+    site = os.environ.get("FRAPPE_SITE", "employee360.localhost")
+    sites_path = os.environ.get("SITES_PATH", "/home/frappe/frappe-bench/sites" if os.path.exists("/home/frappe/frappe-bench/sites") else None)
+    if not getattr(frappe, "db", None) or not frappe.db:
+        frappe.init(site=site, sites_path=sites_path)
+        frappe.connect()
+    frappe.flags.in_test = True
+    if not getattr(frappe.local, "session", None):
+        frappe.local.session = frappe._dict(user="Administrator")
 
 if frappe is not None:
     from employee360.api import attendance, employee
@@ -161,6 +169,7 @@ class TestAttendanceIntegration(unittest.TestCase):
         test_date = datetime.date(2026, 10, 6)
 
         frappe.db.sql(f"DELETE FROM `tabEmployee Checkin` WHERE employee = '{test_emp}' AND DATE(time) = '{test_date}';")
+        frappe.db.sql(f"UPDATE `tabEmployee Activity Log` SET is_regularized = 0 WHERE employee = '{test_emp}' AND activity_date = '{test_date}';")
         frappe.db.sql(f"""
             INSERT INTO `tabEmployee Checkin` (name, employee, log_type, time, source)
             VALUES ('PUNCH-MC-IN', '{test_emp}', 'IN', '{test_date} 09:00:00', 'Web');
@@ -243,8 +252,9 @@ class TestAttendanceIntegration(unittest.TestCase):
         test_emp = "EMP-01362"
         leave_date = datetime.date(2026, 10, 14)  # Wednesday
 
-        # Clean prior punches
+        # Clean prior punches and prior test leaves
         frappe.db.sql(f"DELETE FROM `tabEmployee Checkin` WHERE employee = '{test_emp}' AND DATE(time) = '{leave_date}';")
+        frappe.db.sql(f"DELETE FROM `tabLeave Application` WHERE employee = '{test_emp}' AND name LIKE 'LEAV-TEST-%';")
         
         # Insert approved leave for this date
         leave_id = f"LEAV-TEST-{uuid.uuid4().hex[:6]}"
@@ -331,6 +341,7 @@ class TestAttendanceIntegration(unittest.TestCase):
             DELETE FROM `tabLeave Application`
             WHERE name LIKE 'LEAV-TEST-%';
         """)
+        frappe.db.commit()
 
 if __name__ == "__main__":
     unittest.main()

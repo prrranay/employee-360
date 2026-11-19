@@ -149,9 +149,7 @@ backend/
 │   └── test_doctypes.py
 ├── setup.py                                # Python setuptools package specification
 ├── requirements.txt                        # Backend dependencies (frappe>=14.0.0,<15.0.0)
-├── patches.txt                             # Frappe patch discovery declaration
-├── frappe_runtime.py                       # DEPRECATED — Legacy compatibility layer (raises ImportError)
-└── server.py                               # DEPRECATED — Legacy FastAPI dev server (replaced by Bench)
+└── patches.txt                             # Frappe patch discovery declaration
 ```
 
 ### 3.4 Database Schema & Index Design

@@ -45,7 +45,7 @@ def validate_all():
         )
 
         # 2. Total Activity Log count == SeedConfig.TOTAL_ACTIVITY_RECORDS
-        cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log`;")
+        cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log` WHERE is_synthetic = 1;")
         log_count = cursor.fetchone()[0]
         check(
             "Activity Log Count",
@@ -59,6 +59,7 @@ def validate_all():
         FROM (
             SELECT employee, COUNT(*) AS cnt 
             FROM `tabEmployee Activity Log` 
+            WHERE is_synthetic = 1
             GROUP BY employee
         ) t;
         """)

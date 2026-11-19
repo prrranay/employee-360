@@ -9,12 +9,8 @@ app_version = "1.0.0"
 # Required frappe version
 required_apps = []
 
-# Document Events
-doc_events = {
-    "Employee Checkin": {
-        "on_update": "employee360.doctype.employee_checkin.employee_checkin.on_checkin_update"
-    }
-}
+# Document Events (EmployeeCheckin controller handles on_update directly to prevent duplicate recalculation)
+doc_events = {}
 
 # Scheduled Tasks / Background Jobs
 scheduler_events = {

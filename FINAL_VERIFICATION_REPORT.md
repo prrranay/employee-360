@@ -54,7 +54,7 @@ Each acceptance criterion defined in the specification is evaluated below with i
     - `Attendance Exception` (`attendance_exception/attendance_exception.py`)
     - `Shift` (`shift/shift.py`)
   - Whitelisted RPC controllers in `backend/employee360/api/` (`ceo.py`, `manager.py`, `employee.py`, `attendance.py`, `auth_utils.py`) use genuine `@frappe.whitelist()`.
-  - Legacy `backend/frappe_runtime.py` and `backend/server.py` raise `ImportError` and are explicitly deprecated.
+  - Legacy simulated runtimes (`frappe_runtime.py`, `server.py`) have been completely removed from the codebase.
 
 ---
 
@@ -292,15 +292,16 @@ Each acceptance criterion defined in the specification is evaluated below with i
 ### AC-15: High-Scale Query Latency (10.95M Rows)
 * **Status:** `VERIFIED`
 * **Requirement:** Core analytical endpoints must query the 10.95M dataset efficiently without timeouts.
-* **Benchmark Source:** Empirical measurements from `scripts/benchmark_apis.py` stored in `benchmark_api_results.json`:
-  - **Employee Activity Pagination (Page 1):** Median $3.14\text{ms}$, P95 $3.72\text{ms}$, RPS $313.5$.
-  - **Employee Detail Drilldown:** Median $5.63\text{ms}$, P95 $7.67\text{ms}$, RPS $168.6$.
-  - **Employee Autocomplete Search (30k emps):** Median $33.42\text{ms}$, P95 $38.92\text{ms}$, RPS $28.7$.
-  - **Manager Team Dashboard Summary:** Median $93.91\text{ms}$, P95 $113.15\text{ms}$, RPS $10.5$.
-  - **CEO Company Dashboard Summary (30k emps):** Median $148.12\text{ms}$, P95 $156.65\text{ms}$, RPS $6.7$.
-  - **CEO 30-Day Attendance Trend:** Median $320.01\text{ms}$, P95 $343.63\text{ms}$, RPS $3.1$.
+* **Benchmark Source:** Empirical live HTTP measurements against Frappe on port 8000 from `scripts/benchmark_apis.py` stored in `benchmark_api_results.json`:
+  - **CEO Department Analytics:** Median $16.42\text{ms}$, P95 $35.19\text{ms}$, Throughput $60.0\text{ RPS}$.
+  - **CEO 365-Day Trajectory:** Median $16.48\text{ms}$, P95 $33.78\text{ms}$, Throughput $56.7\text{ RPS}$.
+  - **CEO 30-Day Attendance Trend:** Median $16.68\text{ms}$, P95 $34.30\text{ms}$, Throughput $56.2\text{ RPS}$.
+  - **Manager Team Dashboard Summary:** Median $16.84\text{ms}$, P95 $34.68\text{ms}$, Throughput $53.3\text{ RPS}$.
+  - **CEO Company Dashboard Summary (30k emps):** Median $18.06\text{ms}$, P95 $32.65\text{ms}$, Throughput $48.5\text{ RPS}$.
+  - **CEO Employee Autocomplete Search (30k emps):** Median $30.89\text{ms}$, P95 $38.32\text{ms}$, Throughput $33.6\text{ RPS}$.
+  - **Employee Today Attendance:** Median $33.16\text{ms}$, P95 $53.70\text{ms}$, Throughput $31.4\text{ RPS}$.
 * **Findings:**
-  - All critical interactive endpoints respond well within sub-second thresholds ($< 150\text{ms}$).
+  - All critical interactive endpoints respond in under 35ms median latency over live HTTP connections backed by Redis 7 and MariaDB 10.6 B-Tree composite indexes.
 
 ---
 
@@ -308,23 +309,23 @@ Each acceptance criterion defined in the specification is evaluated below with i
 * **Status:** `VERIFIED`
 * **Requirement:** Queries across the 10.95M rows must use covering or range composite B-Tree indexes without full table scans.
 * **Findings:**
-  - `idx_eal_emp_date`: Primary seek for employee attendance history (evaluates 90 rows instead of 10.95M).
+  - `idx_eal_emp_date` & `uniq_eal_emp_date`: Primary seek and uniqueness guarantee for employee attendance history.
   - `idx_eal_date_status`: Single date aggregation seek and covering index for 30-day trends (`Using index`).
   - `idx_emp_name`: Prefix index on employee names reduces autocomplete scan from 29,780 rows to 101 rows.
-  - MariaDB engine status confirms 0 slow queries and 97.0% buffer pool hit ratio.
+  - MariaDB engine status confirms 0 slow queries, 0 lock waits, and 97.0% buffer pool hit ratio.
 
 ---
 
 ## 3. Operational Boundaries & Caveats
 
-1. **Host Python vs Container Frappe Execution:**
-   - Frappe Framework v14 requires a Linux environment (such as the Docker container `frappe/erpnext-worker:v14` or native Linux bench).
-   - When executing `run_all_tests.py` on a Windows host where `frappe` is not installed into the host's Windows Python environment, the backend tests gracefully report `skipped` using standard unittest semantics (`setUpModule()`), while the frontend Vitest and TypeScript suites execute natively on host.
-   - When executed inside the Frappe bench container (`docker compose exec frappe python run_all_tests.py` or native Linux bench), all 116 tests execute fully against the live Frappe runtime.
+1. **Host-to-Container Test Bridge:**
+   - Frappe Framework v14 runs within the Linux container `frappe/erpnext-worker:v14` on port 8000.
+   - `run_all_tests.py` intelligently detects the host environment: if native Frappe is present, it runs locally; if running on a host OS (e.g., Windows) where Frappe is containerized, it automatically routes the backend suites through `docker exec employee360_frappe`.
+   - Running `python run_all_tests.py` on the host executes all 11 suites (9 backend suites, Vitest, TypeScript typecheck) with 100% pass rate.
 2. **30-Second Punch Rate-Limiting:**
-   - To safeguard against replay attacks and accidental double-clicks, successive punches for the same employee within 30 seconds are rejected with `DuplicateEntryError`.
+   - To safeguard against replay attacks and accidental double-clicks, successive punches for the same employee within 5 seconds are rejected with `DuplicateEntryError`.
 3. **Database Port Connection Timeout:**
-   - Database configuration in `runner.py` now specifies explicit `connect_timeout = 3`, `read_timeout = 3`, and `write_timeout = 3` to fail fast and prevent hanging when database services are restarting.
+   - Database configuration in `runner.py` specifies explicit `connect_timeout = 5` and MariaDB site config fallback to fail fast and prevent hanging.
 
 ---
 

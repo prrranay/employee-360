@@ -41,7 +41,7 @@ tracemalloc.start()
 t0 = time.perf_counter()
 test_batch_count = 0
 total_streamed = 0
-for batch_idx, batch_rows in stream_activity_log_batches(start_batch_idx=0, batch_size=10000):
+for batch_idx, batch_rows, exc_rows, punch_rows in stream_activity_log_batches(start_batch_idx=0, batch_size=10000):
     test_batch_count += 1
     total_streamed += len(batch_rows)
     if total_streamed >= 100000:
@@ -137,7 +137,7 @@ conn.close()
 total_bytes = row["total_length"]
 data_bytes = row["data_length"]
 index_bytes = row["index_length"]
-rows_count = 10950000
+rows_count = row["table_rows"] if row and row.get("table_rows") else 0
 
 print(f"    - Target Record Count       : {rows_count:,}")
 print(f"    - Raw Table Data Storage    : {data_bytes / (1024*1024):.2f} MB ({data_bytes / rows_count:.1f} bytes/row)")

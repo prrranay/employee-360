@@ -31,8 +31,9 @@ DB_CONFIG = {
 
 def get_db_connection():
     """
-    Dynamically connects using Frappe site_config if present,
-    falling back to environment / DB_CONFIG.
+    Dynamically connects using Frappe site_config.
+    Fails explicitly with ConnectionError if Frappe site configuration cannot be read,
+    unless TEST_DATABASE_MODE=1 is set.
     """
     try:
         import frappe
@@ -52,10 +53,14 @@ def get_db_connection():
                 charset="utf8mb4",
                 connect_timeout=5
             )
-    except Exception:
-        pass
+    except Exception as e:
+        if not os.environ.get("TEST_DATABASE_MODE"):
+            raise ConnectionError(f"Failed to connect to database using Frappe site configuration: {e}")
 
-    return pymysql.connect(**DB_CONFIG)
+    if os.environ.get("TEST_DATABASE_MODE"):
+        return pymysql.connect(**DB_CONFIG)
+
+    raise ConnectionError("Frappe site configuration could not be loaded. Set TEST_DATABASE_MODE=1 to run standalone test database.")
 
 
 def seed_shifts(cursor):
@@ -335,8 +340,9 @@ def get_actual_activity_log_count(cursor) -> int:
 
 def get_or_create_checkpoint(cursor, conn) -> int:
     """
-    Inspects checkpoint AND verifies with actual database COUNT query.
-    Prevents false completion declarations.
+    Inspects committed checkpoint from tabSeed Checkpoint.
+    Verifies that actual_count matches the committed batch checkpoint,
+    enforcing exact batch-level completion rather than rough row count divisions.
     """
     actual_count = get_actual_activity_log_count(cursor)
 
@@ -349,12 +355,12 @@ def get_or_create_checkpoint(cursor, conn) -> int:
 
     if row:
         last_batch, meta_rec, status = row
-        # Strictly verify with actual row count!
-        if status == 'Completed' and actual_count >= SeedConfig.TOTAL_ACTIVITY_RECORDS:
+        # Strictly enforce exact record count for completion
+        if status == 'Completed' and actual_count == SeedConfig.TOTAL_ACTIVITY_RECORDS:
             return -1  # Genuinely complete
 
-        # Calculate resume batch based on actual verified rows
-        resumed_batch = actual_count // SeedConfig.BATCH_SIZE
+        # Resume from the last committed batch record
+        resumed_batch = int(last_batch or 0)
         return resumed_batch
     else:
         cursor.execute("""
@@ -367,7 +373,7 @@ def get_or_create_checkpoint(cursor, conn) -> int:
             "target": SeedConfig.TOTAL_ACTIVITY_RECORDS
         })
         conn.commit()
-        return actual_count // SeedConfig.BATCH_SIZE
+        return 0
 
 
 def update_checkpoint(cursor, conn, batch_idx: int, records_inserted: int):
@@ -382,6 +388,22 @@ def update_checkpoint(cursor, conn, batch_idx: int, records_inserted: int):
 
 
 def mark_checkpoint_complete(cursor, conn, actual_count: int):
+    if actual_count != SeedConfig.TOTAL_ACTIVITY_RECORDS:
+        raise ValueError(
+            f"Seeder verification failed: Expected exactly {SeedConfig.TOTAL_ACTIVITY_RECORDS:,} records, "
+            f"but found {actual_count:,} records in database."
+        )
+
+    # Validate unique employee/date combinations
+    cursor.execute("""
+    SELECT COUNT(*) FROM (
+        SELECT employee, activity_date FROM `tabEmployee Activity Log` GROUP BY employee, activity_date HAVING COUNT(*) > 1 LIMIT 1
+    ) dupes;
+    """)
+    dup_row = cursor.fetchone()
+    if dup_row and dup_row[0] > 0:
+        raise ValueError("Seeder verification failed: Duplicate employee and activity_date records detected in database.")
+
     cursor.execute("""
     UPDATE `tabSeed Checkpoint`
     SET `last_completed_batch` = %(batch)s,

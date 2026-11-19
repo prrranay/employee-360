@@ -3,130 +3,185 @@ import os
 import time
 import statistics
 import tracemalloc
+import json
+import urllib.request
+import urllib.parse
+import http.cookiejar
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-try:
-    import frappe
-except ImportError:
-    print("ERROR: Genuine Frappe Framework is not installed in this environment. Run inside Frappe Bench or the Frappe Docker container.")
-    sys.exit(1)
-
-if not getattr(frappe, "db", None) or not frappe.db:
-    try:
-        frappe.init(site="employee360.localhost")
-        frappe.connect()
-    except Exception as e:
-        print(f"Warning: Frappe could not connect to database: {e}")
-
-from employee360.api import ceo, manager, employee, attendance
-
-# Users
 CEO_USER = "ceo@employee360.local"
 MGR_USER = "manager1@employee360.local"
 EMP_USER = "emp1@employee360.local"
+DEFAULT_PWD = os.environ.get("ADMIN_PASSWORD", "Admin123!")
 EMP_ID = "EMP-01362"
 
-def benchmark_function(name, func, args=(), kwargs=None, iterations=50, user=None):
-    if kwargs is None:
-        kwargs = {}
-    
-    if user:
+
+def run_http_benchmarks(base_url="http://localhost:8000", iterations=20):
+    print("=" * 100)
+    print(f"HTTP ENDPOINT BENCHMARK (Full Request Path through Frappe & Gunicorn)")
+    print(f"Target URL: {base_url} | Iterations: {iterations}")
+    print("=" * 100)
+
+    # Establish authenticated session
+    cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+
+    login_data = urllib.parse.urlencode({"usr": CEO_USER, "pwd": DEFAULT_PWD}).encode()
+    login_req = urllib.request.Request(f"{base_url}/api/method/login", data=login_data)
+    try:
+        resp = opener.open(login_req, timeout=10)
+        if resp.status != 200:
+            print(f"Failed to authenticate: HTTP {resp.status}")
+            return []
+    except Exception as e:
+        print(f"Could not connect to {base_url}: {e}")
+        return []
+
+    endpoints = [
+        ("CEO: Dashboard Summary (HTTP)", f"{base_url}/api/method/employee360.api.ceo.get_company_dashboard_summary?target_date=2026-11-16"),
+        ("CEO: Employee Autocomplete (HTTP)", f"{base_url}/api/method/employee360.api.ceo.search_employees?query=Elena&limit=10"),
+        ("CEO: Department Analytics (HTTP)", f"{base_url}/api/method/employee360.api.ceo.get_department_analytics?target_date=2026-11-16"),
+        ("CEO: 30-Day Trend (HTTP)", f"{base_url}/api/method/employee360.api.ceo.get_company_attendance_trend?days=30"),
+        ("CEO: 365-Day Trajectory (HTTP)", f"{base_url}/api/method/employee360.api.ceo.get_company_attendance_trend?days=365"),
+        ("Manager: Team Summary (HTTP)", f"{base_url}/api/method/employee360.api.manager.get_team_dashboard_summary?target_date=2026-11-16"),
+        ("Employee: Today Attendance (HTTP)", f"{base_url}/api/method/employee360.api.attendance.get_today_attendance"),
+    ]
+
+    results = []
+    for name, url in endpoints:
+        # Warmup
+        try:
+            opener.open(url, timeout=30)
+        except Exception:
+            pass
+
+        latencies = []
+        t_start = time.time()
+        for _ in range(iterations):
+            t0 = time.perf_counter()
+            try:
+                r = opener.open(url, timeout=30)
+                _ = r.read()
+                t1 = time.perf_counter()
+                latencies.append((t1 - t0) * 1000.0)
+            except Exception as e:
+                print(f"Error on {name}: {e}")
+
+        total_time = time.time() - t_start
+        if not latencies:
+            continue
+
+        latencies.sort()
+        p50 = statistics.median(latencies)
+        p95 = latencies[int(len(latencies) * 0.95)]
+        p99 = latencies[int(len(latencies) * 0.99)]
+        avg = statistics.mean(latencies)
+        rps = len(latencies) / total_time if total_time > 0 else 0
+
+        print(f"{name:<45} | p50: {p50:>7.2f}ms | p95: {p95:>7.2f}ms | p99: {p99:>7.2f}ms | RPS: {rps:>5.1f}")
+        results.append({
+            "name": name,
+            "mode": "http_endpoint",
+            "iterations": len(latencies),
+            "min_ms": round(min(latencies), 2),
+            "avg_ms": round(avg, 2),
+            "p50_ms": round(p50, 2),
+            "p95_ms": round(p95, 2),
+            "p99_ms": round(p99, 2),
+            "max_ms": round(max(latencies), 2),
+            "rps": round(rps, 1)
+        })
+
+    return results
+
+
+def run_rpc_benchmarks(iterations=30):
+    try:
+        import frappe
+    except ImportError:
+        print("Genuine Frappe is not installed in this environment. Skipping internal Python RPC benchmarks.")
+        return []
+
+    if not getattr(frappe, "db", None) or not frappe.db:
+        try:
+            frappe.init(site="employee360.localhost")
+            frappe.connect()
+        except Exception as e:
+            print(f"Warning: Frappe could not connect to database: {e}")
+            return []
+
+    from employee360.api import ceo, manager, employee, attendance
+
+    print("=" * 100)
+    print(f"INTERNAL PYTHON RPC BENCHMARK (Direct Method Execution)")
+    print("=" * 100)
+
+    benchmarks = [
+        ("CEO: get_company_dashboard_summary", ceo.get_company_dashboard_summary, (), {"target_date": "2026-11-16"}, iterations, CEO_USER),
+        ("CEO: search_employees (Autocomplete)", ceo.search_employees, (), {"query": "Elena", "limit": 10}, iterations, CEO_USER),
+        ("CEO: get_department_analytics", ceo.get_department_analytics, (), {"target_date": "2026-11-16"}, iterations, CEO_USER),
+        ("CEO: get_company_attendance_trend (30D)", ceo.get_company_attendance_trend, (), {"days": 30}, iterations, CEO_USER),
+        ("CEO: get_company_attendance_trend (365D)", ceo.get_company_attendance_trend, (), {"days": 365}, iterations, CEO_USER),
+        ("Manager: get_team_dashboard_summary", manager.get_team_dashboard_summary, (), {"target_date": "2026-11-16"}, iterations, MGR_USER),
+        ("Employee: get_today_attendance", attendance.get_today_attendance, (), {}, iterations, EMP_USER),
+    ]
+
+    results = []
+    for name, func, args, kwargs, iters, user in benchmarks:
         frappe.set_user(user)
-        
-    latencies = []
-    tracemalloc.start()
-    mem_before, _ = tracemalloc.get_traced_memory()
-    
-    # Warmup 2 iterations
-    for _ in range(2):
-        func(*args, **kwargs)
-        
-    t_start_all = time.time()
-    for _ in range(iterations):
-        t0 = time.perf_counter()
-        func(*args, **kwargs)
-        t1 = time.perf_counter()
-        latencies.append((t1 - t0) * 1000.0)
-    total_time = time.time() - t_start_all
-    
-    mem_current, mem_peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    
-    latencies.sort()
-    p50 = statistics.median(latencies)
-    p95 = latencies[int(len(latencies) * 0.95)]
-    p99 = latencies[int(len(latencies) * 0.99)]
-    avg = statistics.mean(latencies)
-    min_lat = min(latencies)
-    max_lat = max(latencies)
-    rps = iterations / total_time
-    mem_delta_mb = (mem_peak - mem_before) / (1024 * 1024)
-    
-    print(f"{name:<42} | p50: {p50:>6.2f}ms | p95: {p95:>6.2f}ms | p99: {p99:>6.2f}ms | RPS: {rps:>6.1f} | PeakMem: {mem_delta_mb:>5.2f}MB")
-    return {
-        "name": name,
-        "iterations": iterations,
-        "min_ms": round(min_lat, 2),
-        "avg_ms": round(avg, 2),
-        "p50_ms": round(p50, 2),
-        "p95_ms": round(p95, 2),
-        "p99_ms": round(p99, 2),
-        "max_ms": round(max_lat, 2),
-        "rps": round(rps, 1),
-        "peak_mem_mb": round(mem_delta_mb, 2)
-    }
+        # Warmup
+        for _ in range(2):
+            func(*args, **kwargs)
 
-print("=" * 100)
-print(f"BENCHMARKING EMPLOYEE360 APIS AGAINST 30,000 EMPLOYEES & 10,950,000 ACTIVITY LOGS")
-print("=" * 100)
+        latencies = []
+        tracemalloc.start()
+        mem_before, _ = tracemalloc.get_traced_memory()
+        t_start = time.time()
+        for _ in range(iters):
+            t0 = time.perf_counter()
+            func(*args, **kwargs)
+            t1 = time.perf_counter()
+            latencies.append((t1 - t0) * 1000.0)
+        total_time = time.time() - t_start
+        _, mem_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
 
-benchmarks = [
-    # 1. CEO Dashboard Summary
-    ("CEO: get_company_dashboard_summary", ceo.get_company_dashboard_summary, (), {"target_date": "2026-11-16"}, 40, CEO_USER),
-    
-    # 2. Employee Autocomplete (Partial Search)
-    ("CEO: search_employees (Name / ID autocomplete)", ceo.search_employees, (), {"query": "Elena", "limit": 10}, 60, CEO_USER),
-    ("CEO: search_employees (Prefix ID)", ceo.search_employees, (), {"query": "EMP-013", "limit": 10}, 60, CEO_USER),
-    
-    # 3. Employee Detail (Single Profile Drill-down)
-    ("CEO: get_employee_overview (Detail)", ceo.get_employee_overview, (), {"employee_id": EMP_ID}, 40, CEO_USER),
-    
-    # 4. Employee Attendance History (Paginated 15 rows)
-    ("Employee: get_employee_activity (Page 1)", employee.get_employee_activity, (EMP_ID,), {"page": 1, "page_size": 15}, 50, EMP_USER),
-    ("Employee: get_employee_activity (Filtered Range)", employee.get_employee_activity, (EMP_ID,), {"from_date": "2026-01-01", "to_date": "2026-03-31", "page": 1, "page_size": 15}, 50, EMP_USER),
-    
-    # 5. Manager Team Summary
-    ("Manager: get_team_dashboard_summary", manager.get_team_dashboard_summary, (), {"target_date": "2026-11-16"}, 40, MGR_USER),
-    ("Manager: get_manager_team", manager.get_manager_team, (), {}, 40, MGR_USER),
-    
-    # 6. Department Analytics
-    ("CEO: get_department_analytics", ceo.get_department_analytics, (), {"target_date": "2026-11-16"}, 40, CEO_USER),
-    
-    # 7. Attendance Trend
-    ("CEO: get_company_attendance_trend (30 days)", ceo.get_company_attendance_trend, (), {"days": 30}, 30, CEO_USER),
-    ("Manager: get_team_attendance_trend (30 days)", manager.get_team_attendance_trend, (), {"days": 30}, 30, MGR_USER),
-    ("Employee: get_employee_attendance_trend (30 days)", employee.get_employee_attendance_trend, (EMP_ID,), {"days": 30}, 50, EMP_USER),
-    
-    # 8. Leave Overview
-    ("CEO: get_company_leave_overview", ceo.get_company_leave_overview, (), {}, 40, CEO_USER),
-    ("Manager: get_team_leave_overview", manager.get_team_leave_overview, (), {}, 40, MGR_USER),
-    ("Employee: get_employee_leave_history", employee.get_employee_leave_history, (EMP_ID,), {}, 50, EMP_USER),
-    
-    # 9. Attendance Punch Widget
-    ("Employee: get_today_attendance", attendance.get_today_attendance, (), {}, 50, EMP_USER),
-]
+        latencies.sort()
+        p50 = statistics.median(latencies)
+        p95 = latencies[int(len(latencies) * 0.95)]
+        p99 = latencies[int(len(latencies) * 0.99)]
+        avg = statistics.mean(latencies)
+        rps = iters / total_time if total_time > 0 else 0
+        mem_mb = (mem_peak - mem_before) / (1024 * 1024)
 
-results = []
-for name, func, args, kwargs, iters, user in benchmarks:
-    res = benchmark_function(name, func, args, kwargs, iters, user)
-    results.append(res)
+        print(f"{name:<45} | p50: {p50:>7.2f}ms | p95: {p95:>7.2f}ms | p99: {p99:>7.2f}ms | RPS: {rps:>5.1f}")
+        results.append({
+            "name": name,
+            "mode": "python_rpc",
+            "iterations": iters,
+            "min_ms": round(min(latencies), 2),
+            "avg_ms": round(avg, 2),
+            "p50_ms": round(p50, 2),
+            "p95_ms": round(p95, 2),
+            "p99_ms": round(p99, 2),
+            "max_ms": round(max(latencies), 2),
+            "rps": round(rps, 1),
+            "peak_mem_mb": round(mem_mb, 2)
+        })
 
-import json
-with open("benchmark_api_results.json", "w") as f:
-    json.dump(results, f, indent=2)
+    return results
 
-print("\nSaved benchmark results to benchmark_api_results.json")
+
+if __name__ == "__main__":
+    http_results = run_http_benchmarks()
+    rpc_results = run_rpc_benchmarks()
+    all_results = http_results + rpc_results
+
+    with open("benchmark_api_results.json", "w") as f:
+        json.dump(all_results, f, indent=2)
+
+    print("\nSaved comprehensive benchmark results to benchmark_api_results.json")

@@ -15,6 +15,27 @@ def require_ceo():
         frappe.throw(_("Unauthorized: CEO or System Manager privileges required"), frappe.PermissionError)
 
 
+def get_effective_activity_date(target_date: Optional[str] = None):
+    """
+    Returns getdate(target_date) if provided, or the most recent activity_date
+    cached from Redis to avoid repeated database boundary queries.
+    """
+    if target_date:
+        return getdate(target_date)
+    cache = frappe.cache()
+    cached_latest = cache.get_value("employee360:latest_activity_date")
+    if cached_latest:
+        return getdate(cached_latest)
+    has_today = frappe.db.sql("SELECT 1 FROM `tabEmployee Activity Log` WHERE activity_date = %s LIMIT 1", (nowdate(),))
+    if has_today:
+        date_val = getdate(nowdate())
+    else:
+        latest_row = frappe.db.sql("SELECT activity_date FROM `tabEmployee Activity Log` ORDER BY activity_date DESC LIMIT 1")
+        date_val = latest_row[0][0] if (latest_row and latest_row[0][0]) else getdate(nowdate())
+    cache.set_value("employee360:latest_activity_date", str(date_val), expires_in_sec=600)
+    return date_val
+
+
 @frappe.whitelist()
 def get_company_kpis(target_date: Optional[str] = None):
     """Whitelisted alias for get_company_dashboard_summary."""
@@ -25,33 +46,34 @@ def get_company_kpis(target_date: Optional[str] = None):
 def get_company_dashboard_summary(target_date: Optional[str] = None):
     """
     Company-wide attendance KPI card metrics for a single calendar date.
-    Pure database aggregation across all 30,000 employees.
+    Pure database aggregation across all 30,000 employees backed by Redis cache.
     """
     require_ceo()
-    if target_date:
-        date_val = getdate(target_date)
-    else:
-        has_today = frappe.db.sql("SELECT 1 FROM `tabEmployee Activity Log` WHERE activity_date = %s LIMIT 1", (nowdate(),))
-        if has_today:
-            date_val = getdate(nowdate())
-        else:
-            latest_row = frappe.db.sql("SELECT MAX(activity_date) FROM `tabEmployee Activity Log`")
-            date_val = latest_row[0][0] if (latest_row and latest_row[0][0]) else getdate(nowdate())
+    date_val = get_effective_activity_date(target_date)
 
-    # Total active employees
-    total_employees = frappe.db.sql(
-        "SELECT COUNT(*) AS total FROM `tabEmployee` WHERE employment_status = 'Active'",
-        as_dict=True
-    )[0]["total"]
+    cache = frappe.cache()
+    cache_key = f"employee360:ceo:summary:{date_val}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
 
-    # Attendance distribution for the target date
+    # Total active employees (cached)
+    total_employees = cache.get_value("employee360:total_active_employees")
+    if total_employees is None:
+        total_employees = frappe.db.sql(
+            "SELECT COUNT(*) AS total FROM `tabEmployee` WHERE employment_status = 'Active'",
+            as_dict=True
+        )[0]["total"]
+        cache.set_value("employee360:total_active_employees", total_employees, expires_in_sec=600)
+
+    # Attendance distribution and work seconds for the target date in a single indexed query
     status_counts = frappe.db.sql(
         """
         SELECT 
             attendance_status,
             COUNT(*) AS count,
             AVG(CASE WHEN total_work_seconds > 0 THEN total_work_seconds ELSE NULL END) AS avg_work_sec
-        FROM `tabEmployee Activity Log`
+        FROM `tabEmployee Activity Log` FORCE INDEX (idx_eal_date_status)
         WHERE activity_date = %(date)s
         GROUP BY attendance_status;
         """,
@@ -72,23 +94,22 @@ def get_company_dashboard_summary(target_date: Optional[str] = None):
     attended = present + late + (half_day * 0.5)
     attendance_rate = round((attended / workable) * 100, 2) if workable > 0 else 0.0
 
-    # Calculate average daily work duration across completed sessions
-    avg_sec_row = frappe.db.sql(
-        """
-        SELECT AVG(total_work_seconds) AS avg_sec
-        FROM `tabEmployee Activity Log`
-        WHERE activity_date = %(date)s
-          AND attendance_status IN ('Present', 'Late', 'Half Day')
-          AND total_work_seconds > 0;
-        """,
-        {"date": date_val},
-        as_dict=True
+    # Calculate average daily work duration across completed sessions from status_counts
+    work_sec_weighted = sum(
+        float(r["avg_work_sec"] or 0) * r["count"]
+        for r in status_counts
+        if r["attendance_status"] in ("Present", "Late", "Half Day") and r.get("avg_work_sec")
     )
-    avg_seconds = int(avg_sec_row[0]["avg_sec"] or 0) if avg_sec_row else 0
+    work_count = sum(
+        r["count"]
+        for r in status_counts
+        if r["attendance_status"] in ("Present", "Late", "Half Day") and r.get("avg_work_sec")
+    )
+    avg_seconds = int(work_sec_weighted / work_count) if work_count > 0 else 0
     avg_hours = avg_seconds // 3600
     avg_mins = (avg_seconds % 3600) // 60
 
-    return {
+    result = {
         "date": str(date_val),
         "total_employees": total_employees,
         "present": present,
@@ -102,6 +123,8 @@ def get_company_dashboard_summary(target_date: Optional[str] = None):
         "avg_work_seconds": avg_seconds,
         "avg_work_formatted": f"{avg_hours}h {avg_mins}m"
     }
+    cache.set_value(cache_key, result, expires_in_sec=300)
+    return result
 
 
 @frappe.whitelist()
@@ -225,18 +248,16 @@ def get_employee_overview(
 def get_department_analytics(target_date: Optional[str] = None):
     """
     Department-wise attendance breakdown and statistics for a given date.
-    Uses pure database aggregation joining Employee and Activity Log.
+    Uses pure database aggregation joining Employee and Activity Log backed by Redis cache.
     """
     require_ceo()
-    if target_date:
-        date_val = getdate(target_date)
-    else:
-        has_today = frappe.db.sql("SELECT 1 FROM `tabEmployee Activity Log` WHERE activity_date = %s LIMIT 1", (nowdate(),))
-        if has_today:
-            date_val = getdate(nowdate())
-        else:
-            latest_row = frappe.db.sql("SELECT MAX(activity_date) FROM `tabEmployee Activity Log`")
-            date_val = latest_row[0][0] if (latest_row and latest_row[0][0]) else getdate(nowdate())
+    date_val = get_effective_activity_date(target_date)
+
+    cache = frappe.cache()
+    cache_key = f"employee360:ceo:dept:{date_val}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
 
     query = """
     SELECT 
@@ -265,6 +286,7 @@ def get_department_analytics(target_date: Optional[str] = None):
         sec = int(dept["avg_work_seconds"] or 0)
         dept["avg_work_formatted"] = f"{sec // 3600}h {(sec % 3600) // 60}m"
 
+    cache.set_value(cache_key, departments, expires_in_sec=300)
     return departments
 
 
@@ -276,19 +298,26 @@ def get_company_attendance_trend(
 ):
     """
     Aggregated daily attendance trends across the whole company.
-    Uses indexed (activity_date, attendance_status) for high-speed response.
+    Uses indexed (activity_date, attendance_status) for high-speed response backed by Redis cache.
     """
     require_ceo()
     
     if to_date:
         end_date = getdate(to_date)
     else:
-        end_date = getdate(nowdate())
+        end_date = get_effective_activity_date()
 
+    num_days = max(7, min(365, int(days)))
     if from_date:
         start_date = getdate(from_date)
     else:
-        start_date = end_date - datetime.timedelta(days=max(7, min(365, int(days))))
+        start_date = end_date - datetime.timedelta(days=num_days)
+
+    cache = frappe.cache()
+    cache_key = f"employee360:ceo:trend:{start_date}:{end_date}:{num_days}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
 
     query = """
     SELECT 
@@ -300,12 +329,13 @@ def get_company_attendance_trend(
         SUM(CASE WHEN attendance_status = 'On Leave' THEN 1 ELSE 0 END) AS on_leave,
         SUM(CASE WHEN attendance_status = 'Weekly Off' THEN 1 ELSE 0 END) AS weekly_off,
         SUM(CASE WHEN attendance_status = 'Missing Check-out' THEN 1 ELSE 0 END) AS missing_checkout
-    FROM `tabEmployee Activity Log`
+    FROM `tabEmployee Activity Log` FORCE INDEX (idx_eal_date_status)
     WHERE activity_date BETWEEN %(start_date)s AND %(end_date)s
     GROUP BY activity_date
     ORDER BY activity_date ASC;
     """
     trend = frappe.db.sql(query, {"start_date": start_date, "end_date": end_date}, as_dict=True)
+    cache.set_value(cache_key, trend, expires_in_sec=600)
     return trend
 
 
@@ -395,7 +425,7 @@ def get_company_leave_overview(
         if has_today:
             date_val = getdate(nowdate())
         else:
-            latest_row = frappe.db.sql("SELECT MAX(activity_date) FROM `tabEmployee Activity Log`")
+            latest_row = frappe.db.sql("SELECT activity_date FROM `tabEmployee Activity Log` ORDER BY activity_date DESC LIMIT 1")
             date_val = latest_row[0][0] if (latest_row and latest_row[0][0]) else getdate(nowdate())
 
     # Pending applications count
@@ -503,18 +533,16 @@ def get_manager_performance(target_date: Optional[str] = None):
     """
     Returns aggregated team performance metrics for key managers on target_date.
     Includes team size, attendance rate, present count, late arrivals, absent count,
-    and average work duration.
+    and average work duration backed by Redis cache.
     """
     require_ceo()
-    if target_date:
-        date_val = getdate(target_date)
-    else:
-        has_today = frappe.db.sql("SELECT 1 FROM `tabEmployee Activity Log` WHERE activity_date = %s LIMIT 1", (nowdate(),))
-        if has_today:
-            date_val = getdate(nowdate())
-        else:
-            latest_row = frappe.db.sql("SELECT MAX(activity_date) FROM `tabEmployee Activity Log`")
-            date_val = latest_row[0][0] if (latest_row and latest_row[0][0]) else getdate(nowdate())
+    date_val = get_effective_activity_date(target_date)
+
+    cache = frappe.cache()
+    cache_key = f"employee360:ceo:mgr_perf:{date_val}"
+    cached = cache.get_value(cache_key)
+    if cached is not None:
+        return cached
 
     query = """
     SELECT 
@@ -576,10 +604,12 @@ def get_manager_performance(target_date: Optional[str] = None):
             "performance_status": status
         })
 
-    return {
+    result = {
         "date": str(date_val),
         "managers": results
     }
+    cache.set_value(cache_key, result, expires_in_sec=300)
+    return result
 
 
 @frappe.whitelist()

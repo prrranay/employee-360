@@ -14,10 +14,6 @@ def get_session_user_and_roles() -> Tuple[str, List[str]]:
 def get_current_employee_id() -> Optional[str]:
     """Resolves the Employee name/ID linked to the authenticated user."""
     user, _ = get_session_user_and_roles()
-    if user == "Administrator":
-        emp = frappe.db.get_value("Employee", {"user_id": user}, "name")
-        return emp or "EMP-00001"
-
     emp = frappe.db.get_value("Employee", {"user_id": user}, "name")
     return emp
 
@@ -97,10 +93,15 @@ def assert_can_manage_employee(target_emp_id: str):
     """
     Enforces authorization to take managerial actions on target_emp_id.
     - Cannot approve self requests.
-    - Must be authorized manager or CEO.
+    - Must be authorized manager or CEO/System Manager/Administrator.
     """
     user, roles = get_session_user_and_roles()
     current_emp = get_current_employee_id()
+
+    # System Administrator / CEO without a personal employee record has administrative authority
+    if is_ceo(roles) and not current_emp:
+        return
+
     if not current_emp:
         frappe.throw(_("No employee profile linked to user"), frappe.PermissionError)
 

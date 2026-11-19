@@ -56,6 +56,25 @@ def detect_attendance_exceptions_for_date(target_date=None, batch_size: int = 20
     date_val = getdate(target_date) if target_date else (getdate(nowdate()) - datetime.timedelta(days=1))
     weekday_name = date_val.strftime("%A")
 
+    # 1. Company Holiday Check
+    try:
+        from employee360.seed.config import SeedConfig
+        company_holidays = SeedConfig.HOLIDAYS
+    except Exception:
+        company_holidays = {}
+
+    is_holiday = date_val in company_holidays or bool(frappe.db.exists("Holiday", {"holiday_date": date_val}))
+    if is_holiday:
+        holiday_name = company_holidays.get(date_val, "Company Holiday")
+        return {
+            "status": "success",
+            "target_date": str(date_val),
+            "message": f"Target date is a scheduled company holiday ({holiday_name}). Attendance exceptions skipped.",
+            "total_active_employees": 0,
+            "scanned_count": 0,
+            "exceptions_detected": 0
+        }
+
     # Fetch shift configurations cache
     shifts_raw = frappe.db.sql(
         "SELECT name, start_time, end_time, grace_period_mins, expected_working_hours, weekly_off_days FROM `tabShift`",
@@ -212,10 +231,13 @@ def detect_attendance_exceptions_for_date(target_date=None, batch_size: int = 20
                         """,
                         exc_row
                     )
-                except Exception:
-                    pass
+                    created_exceptions += 1
+                except Exception as e:
+                    frappe.log_error(
+                        f"Failed to insert attendance exception for employee {exc_row[1]}: {str(e)}",
+                        "AttendanceExceptionDetection"
+                    )
             frappe.db.commit()
-            created_exceptions += len(new_exceptions)
 
         offset += batch_size
 

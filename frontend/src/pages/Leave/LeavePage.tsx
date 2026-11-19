@@ -18,6 +18,8 @@ export const LeavePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'team' | 'calendar' | 'personal'>(isManager || isCeo ? 'team' : 'personal');
   const [page, setPage] = useState(1);
   const pageSize = 15;
+  const [calendarPage, setCalendarPage] = useState(1);
+  const calendarPageSize = 12;
 
   // Leave Balances for Current Employee
   const { data: balances, isLoading: loadingBalances } = useQuery({
@@ -110,6 +112,7 @@ export const LeavePage: React.FC = () => {
               <button
                 onClick={() => {
                   setActiveTab('calendar');
+                  setCalendarPage(1);
                 }}
                 className={`rounded-lg px-3 py-1.5 font-semibold transition ${
                   activeTab === 'calendar'
@@ -196,33 +199,47 @@ export const LeavePage: React.FC = () => {
               message="No team members currently have approved or pending leave scheduled in this period."
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {calendarEvents.map((evt) => (
-                <div key={evt.name} className="rounded-xl border border-slate-200 p-4 hover:shadow-sm transition bg-slate-50/50">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">{evt.employee_name}</p>
-                      <p className="text-[11px] text-slate-500">{evt.department} • {evt.employee}</p>
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {calendarEvents
+                  .slice((calendarPage - 1) * calendarPageSize, calendarPage * calendarPageSize)
+                  .map((evt) => (
+                    <div key={evt.name} className="rounded-xl border border-slate-200 p-4 hover:shadow-sm transition bg-slate-50/50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">{evt.employee_name}</p>
+                          <p className="text-[11px] text-slate-500">{evt.department} • {evt.employee}</p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                            evt.status === 'Approved'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                              : 'bg-amber-50 border-amber-200 text-amber-700'
+                          }`}
+                        >
+                          {evt.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center gap-1.5 text-xs text-indigo-700 font-semibold">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>{formatDate(evt.from_date)} – {formatDate(evt.to_date)}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600 line-clamp-2">
+                        <span className="font-medium text-slate-700">{evt.leave_type}:</span> {evt.reason}
+                      </p>
                     </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
-                        evt.status === 'Approved'
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          : 'bg-amber-50 border-amber-200 text-amber-700'
-                      }`}
-                    >
-                      {evt.status}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-1.5 text-xs text-indigo-700 font-semibold">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{formatDate(evt.from_date)} – {formatDate(evt.to_date)}</span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-600 line-clamp-2">
-                    <span className="font-medium text-slate-700">{evt.leave_type}:</span> {evt.reason}
-                  </p>
-                </div>
-              ))}
+                  ))}
+              </div>
+
+              <div className="mt-5 -mx-5 -mb-5">
+                <Pagination
+                  currentPage={calendarPage}
+                  totalPages={Math.ceil(calendarEvents.length / calendarPageSize) || 1}
+                  totalRecords={calendarEvents.length}
+                  pageSize={calendarPageSize}
+                  onPageChange={setCalendarPage}
+                />
+              </div>
             </div>
           )}
         </div>

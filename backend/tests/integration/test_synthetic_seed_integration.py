@@ -38,7 +38,7 @@ class TestSyntheticSeedIntegration(unittest.TestCase):
     def test_02_exact_activity_log_count(self):
         """Verify: Exactly 10,950,000 Employee Activity Log records (30k employees * 365 days)."""
         with self.conn.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log`;")
+            cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log` WHERE is_synthetic = 1;")
             count = cursor.fetchone()[0]
             self.assertEqual(count, SeedConfig.TOTAL_ACTIVITY_RECORDS, f"Expected 10,950,000 records, got {count:,}")
 
@@ -50,6 +50,7 @@ class TestSyntheticSeedIntegration(unittest.TestCase):
             FROM (
                 SELECT employee, COUNT(*) AS cnt 
                 FROM `tabEmployee Activity Log` FORCE INDEX (idx_eal_emp_date)
+                WHERE is_synthetic = 1
                 GROUP BY employee
                 LIMIT 5000
             ) t;
@@ -171,11 +172,26 @@ class TestSyntheticSeedIntegration(unittest.TestCase):
         - Duplicate prevention
         - Validation
         """
+        try:
+            import frappe
+            primary_db = frappe.conf.get("db_name") if getattr(frappe, "conf", None) else "employee360"
+            db_host = frappe.conf.get("db_host") or os.environ.get("MARIADB_HOST", "mariadb")
+            db_port = int(frappe.conf.get("db_port") or os.environ.get("MARIADB_PORT", 3306))
+        except Exception:
+            primary_db = "employee360"
+            db_host = os.environ.get("MARIADB_HOST", "mariadb")
+            db_port = int(os.environ.get("MARIADB_PORT", 3306))
+
+        root_pwd = os.environ.get("MARIADB_ROOT_PASSWORD", "frappe_root_password")
         test_db = "employee360_disposable_test"
-        conn = pymysql.connect(
-            host="127.0.0.1", port=3306, user="root", password="root",
-            charset="utf8mb4", autocommit=True
-        )
+        try:
+            conn = pymysql.connect(
+                host=db_host, port=db_port, user="root", password=root_pwd,
+                charset="utf8mb4", autocommit=True
+            )
+        except Exception as e:
+            raise unittest.SkipTest(f"Direct root database connection to {db_host}:{db_port} unavailable for disposable test: {e}")
+
         try:
             with conn.cursor() as cur:
                 # 1. Create disposable database
@@ -185,7 +201,7 @@ class TestSyntheticSeedIntegration(unittest.TestCase):
 
                 # 2. Clone schema from primary database
                 for tbl in ["tabShift", "tabEmployee", "tabEmployee Checkin", "tabEmployee Activity Log", "tabSeed Checkpoint", "tabLeave Application", "tabAttendance Exception"]:
-                    cur.execute(f"CREATE TABLE `{test_db}`.`{tbl}` LIKE `employee360`.`{tbl}`;")
+                    cur.execute(f"CREATE TABLE `{test_db}`.`{tbl}` LIKE `{primary_db}`.`{tbl}`;")
 
                 # 3. Test running seed insertion (batch 1: 50 employees)
                 cur.execute(f"""
@@ -202,8 +218,8 @@ class TestSyntheticSeedIntegration(unittest.TestCase):
 
                 # 4. Test Checkpoint creation & partial failure simulation
                 cur.execute(f"""
-                    INSERT INTO `{test_db}`.`tabSeed Checkpoint` (seed_key, last_completed_batch, total_records_inserted, target_records, status)
-                    VALUES ('attendance_seed', 1, 365, 730, 'In Progress');
+                    INSERT INTO `{test_db}`.`tabSeed Checkpoint` (name, seed_key, last_completed_batch, total_records_inserted, target_records, status)
+                    VALUES ('attendance_seed', 'attendance_seed', 1, 365, 730, 'In Progress');
                 """)
 
                 # 5. Test Resumption: runner reads checkpoint batch=1 and resumes next batch
