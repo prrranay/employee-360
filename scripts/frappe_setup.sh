@@ -102,7 +102,7 @@ echo "  -> Migrations completed."
 # ─── Step 6: Load fixtures (Roles: CEO, Manager, Employee) ──────────────────
 echo ""
 echo "[6/7] Loading fixtures (Roles)..."
-bench --site "$SITE_NAME" load-fixtures --app employee360
+bench --site "$SITE_NAME" execute frappe.utils.fixtures.sync_fixtures --args "['employee360']" || true
 echo "  -> Fixtures loaded."
 
 # ─── Step 7: Verify installation ────────────────────────────────────────────

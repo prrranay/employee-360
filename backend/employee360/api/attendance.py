@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional
+from typing import Optional, Dict, Any, List
 import frappe
 from frappe import _
 from frappe.utils import getdate, now_datetime, nowdate, get_datetime
@@ -57,7 +57,7 @@ def check_in(
 ):
     """
     Records a live IN punch for the authenticated employee with concurrency protection.
-    Uses row-level locking on tabEmployee to serialize concurrent check-in requests.
+    Uses row-level locking on tabEmployee and tabEmployee Checkin to serialize concurrent punch attempts.
     """
     emp_id = _get_active_employee_or_throw()
 
@@ -71,13 +71,15 @@ def check_in(
         start_dt = datetime.datetime.combine(today, datetime.time.min)
         end_dt = datetime.datetime.combine(today, datetime.time.max)
 
+        # Locking read on punches for today to ensure up-to-date state under REPEATABLE READ
         punches = frappe.db.sql(
             """
             SELECT name, time, log_type
             FROM `tabEmployee Checkin`
             WHERE employee = %(employee)s
               AND time BETWEEN %(start_dt)s AND %(end_dt)s
-            ORDER BY time ASC;
+            ORDER BY time ASC
+            FOR UPDATE;
             """,
             {"employee": emp_id, "start_dt": start_dt, "end_dt": end_dt},
             as_dict=True
@@ -93,13 +95,13 @@ def check_in(
 
             last_punch_time = get_datetime(last_punch.get("time"))
             delta_seconds = abs((now_time - last_punch_time).total_seconds())
-            if delta_seconds < 10:
+            if delta_seconds < 5:
                 frappe.throw(
                     _("A punch was already recorded {0} seconds ago. Please wait before punching again.").format(int(delta_seconds)),
                     frappe.DuplicateEntryError
                 )
 
-        # Create Checkin Document
+        # Create Checkin Document (runs validation including timestamp order and authorization)
         checkin = frappe.get_doc({
             "doctype": "Employee Checkin",
             "employee": emp_id,
@@ -112,8 +114,9 @@ def check_in(
             "longitude": longitude,
             "gps_accuracy": gps_accuracy
         })
-        checkin.flags.ignore_permissions = True
         checkin.insert()
+
+        recalculate_daily_summary(emp_id, today)
         frappe.db.commit()
     except Exception:
         frappe.db.rollback()
@@ -137,6 +140,7 @@ def check_out(
     emp_id = _get_active_employee_or_throw()
 
     try:
+        # Row-level lock on the Employee record
         frappe.db.sql("SELECT name FROM `tabEmployee` WHERE name = %s FOR UPDATE;", (emp_id,))
 
         now_time = now_datetime()
@@ -145,13 +149,15 @@ def check_out(
         start_dt = datetime.datetime.combine(today, datetime.time.min)
         end_dt = datetime.datetime.combine(today, datetime.time.max)
 
+        # Locking read on punches for today
         punches = frappe.db.sql(
             """
             SELECT name, time, log_type
             FROM `tabEmployee Checkin`
             WHERE employee = %(employee)s
               AND time BETWEEN %(start_dt)s AND %(end_dt)s
-            ORDER BY time ASC;
+            ORDER BY time ASC
+            FOR UPDATE;
             """,
             {"employee": emp_id, "start_dt": start_dt, "end_dt": end_dt},
             as_dict=True
@@ -166,7 +172,7 @@ def check_out(
         last_punch = punches[-1]
         last_punch_time = get_datetime(last_punch.get("time"))
         delta_seconds = abs((now_time - last_punch_time).total_seconds())
-        if delta_seconds < 10:
+        if delta_seconds < 5:
             frappe.throw(
                 _("Check-in was recorded {0} seconds ago. Please wait before checking out.").format(int(delta_seconds)),
                 frappe.DuplicateEntryError
@@ -184,8 +190,9 @@ def check_out(
             "longitude": longitude,
             "gps_accuracy": gps_accuracy
         })
-        checkin.flags.ignore_permissions = True
         checkin.insert()
+
+        recalculate_daily_summary(emp_id, today)
         frappe.db.commit()
     except Exception:
         frappe.db.rollback()
@@ -269,7 +276,7 @@ def request_attendance_correction(
     """
     emp_id = _get_active_employee_or_throw()
 
-    if not activity_date or not reason:
+    if not activity_date or not reason or not reason.strip():
         frappe.throw(_("Activity Date and Reason are required for attendance regularization"), frappe.MandatoryError)
 
     date_val = getdate(activity_date)
@@ -302,10 +309,11 @@ def request_attendance_correction(
     }
     mapped_type = valid_types.get(exception_type, "Missing Check-out")
 
-    desc = f"Regularization requested to '{requested_status}'. Reason: {reason}"
+    desc = f"Regularization requested to '{requested_status}'. Reason: {reason.strip()}"
     if requested_in_time or requested_out_time:
         desc += f" (Times: IN={requested_in_time or 'N/A'}, OUT={requested_out_time or 'N/A'})"
 
+    # Create Attendance Exception record
     exception_doc = frappe.get_doc({
         "doctype": "Attendance Exception",
         "employee": emp_id,
@@ -322,6 +330,25 @@ def request_attendance_correction(
     exception_doc.flags.ignore_permissions = True
     exception_doc.insert()
 
+    # Create matching Attendance Correction Request record
+    correction_doc = frappe.get_doc({
+        "doctype": "Attendance Correction Request",
+        "name": exception_doc.name,
+        "employee": emp_id,
+        "activity_date": date_val,
+        "exception_type": mapped_type,
+        "requested_status": requested_status,
+        "requested_in_time": requested_in_time,
+        "requested_out_time": requested_out_time,
+        "reason": reason.strip(),
+        "status": "Pending",
+        "assigned_manager": manager
+    })
+    correction_doc.flags.ignore_permissions = True
+    correction_doc.insert()
+
+    frappe.db.commit()
+
     return {
         "message": "Attendance regularization request submitted successfully",
         "exception_id": exception_doc.name,
@@ -329,11 +356,34 @@ def request_attendance_correction(
     }
 
 
+@frappe.whitelist()
+def get_my_correction_requests():
+    """
+    Returns submitted attendance correction requests for the authenticated employee.
+    """
+    emp_id = _get_active_employee_or_throw()
+    requests = frappe.db.sql(
+        """
+        SELECT
+            name, employee, activity_date, exception_type,
+            requested_status, requested_in_time, requested_out_time,
+            reason, status, assigned_manager, resolved_by, resolved_at, resolution_comments
+        FROM `tabAttendance Correction Request`
+        WHERE employee = %(employee)s
+        ORDER BY activity_date DESC;
+        """,
+        {"employee": emp_id},
+        as_dict=True
+    )
+    return requests
+
+
 @frappe.whitelist(methods=["POST"])
 def approve_attendance_exception(exception_id: str, comments: Optional[str] = None):
     """
     Manager or CEO approval of an attendance regularization request.
-    Applies the correction with full audit logging and updates the activity log.
+    Applies the correction with full audit logging, row-level concurrency lock,
+    and anti-self-approval enforcement.
     """
     if not exception_id:
         frappe.throw(_("Exception ID is required"), frappe.MandatoryError)
@@ -341,102 +391,134 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
     user, roles = get_session_user_and_roles()
     current_emp = get_current_employee_id()
 
-    exc = frappe.db.get_value(
-        "Attendance Exception",
-        exception_id,
-        [
-            "name", "employee", "activity_date", "exception_type",
-            "description", "status", "assigned_manager", "requested_status",
-            "requested_in_time", "requested_out_time"
-        ],
-        as_dict=True
-    )
-    if not exc:
-        frappe.throw(_("Attendance exception {0} not found").format(exception_id), frappe.ValidationError)
-
-    target_emp = exc["employee"]
-    assert_can_manage_employee(target_emp)
-
-    if exc["status"] in ("Resolved", "Ignored"):
-        frappe.throw(_("Exception is already {0}").format(exc["status"]), frappe.ValidationError)
-
-    now = now_datetime()
-    resolved_by = current_emp or user
-    resolution_comments = comments or "Approved by Manager"
-
-    frappe.db.set_value(
-        "Attendance Exception",
-        exception_id,
-        {
-            "status": "Resolved",
-            "resolved_by": resolved_by,
-            "resolved_at": now,
-            "resolution_comments": resolution_comments
-        }
-    )
-
-    activity_date = exc["activity_date"]
-    req_status = exc.get("requested_status") or "Present"
-
-    parsed_in = _parse_time_val(exc.get("requested_in_time"))
-    if parsed_in:
-        in_dt = datetime.datetime.combine(activity_date, parsed_in)
-        existing_in = frappe.db.sql(
-            "SELECT name FROM `tabEmployee Checkin` WHERE employee = %(employee)s AND time = %(time)s",
-            {"employee": target_emp, "time": in_dt}
+    try:
+        # Row-level lock on the Exception record to serialize concurrent approvals
+        exc_rows = frappe.db.sql(
+            """
+            SELECT
+                name, employee, activity_date, exception_type,
+                description, status, assigned_manager, requested_status,
+                requested_in_time, requested_out_time
+            FROM `tabAttendance Exception`
+            WHERE name = %s
+            FOR UPDATE;
+            """,
+            (exception_id,),
+            as_dict=True
         )
-        if not existing_in:
-            in_punch = frappe.get_doc({
-                "doctype": "Employee Checkin",
-                "employee": target_emp,
-                "time": in_dt,
-                "log_type": "IN",
-                "source": "Admin Correction",
-                "source_record_id": exception_id,
-                "device_info": f"Regularization approved by {resolved_by}"
-            })
-            in_punch.flags.ignore_permissions = True
-            in_punch.insert()
+        if not exc_rows:
+            frappe.throw(_("Attendance exception {0} not found").format(exception_id), frappe.DoesNotExistError)
 
-    parsed_out = _parse_time_val(exc.get("requested_out_time"))
-    if parsed_out:
-        out_dt = datetime.datetime.combine(activity_date, parsed_out)
-        existing_out = frappe.db.sql(
-            "SELECT name FROM `tabEmployee Checkin` WHERE employee = %(employee)s AND time = %(time)s",
-            {"employee": target_emp, "time": out_dt}
-        )
-        if not existing_out:
-            out_punch = frappe.get_doc({
-                "doctype": "Employee Checkin",
-                "employee": target_emp,
-                "time": out_dt,
-                "log_type": "OUT",
-                "source": "Admin Correction",
-                "source_record_id": exception_id,
-                "device_info": f"Regularization approved by {resolved_by}"
-            })
-            out_punch.flags.ignore_permissions = True
-            out_punch.insert()
+        exc = exc_rows[0]
 
-    recalculate_daily_summary(target_emp, activity_date)
+        # Prevent double-approval or processing already resolved/ignored requests
+        if exc["status"] in ("Resolved", "Ignored", "Approved", "Rejected"):
+            frappe.throw(
+                _("This exception has already been processed with status '{0}'").format(exc["status"]),
+                frappe.ValidationError
+            )
 
-    eal_name = frappe.db.get_value(
-        "Employee Activity Log",
-        {"employee": target_emp, "activity_date": activity_date},
-        "name"
-    )
-    if eal_name:
+        target_emp = exc["employee"]
+
+        # Strict managerial authorization check: cannot approve own request; must manage target employee
+        assert_can_manage_employee(target_emp)
+
+        now = now_datetime()
+        resolved_by = current_emp or user
+        resolution_comments = comments or "Approved by Manager"
+
+        # Set internal server flag allowing regularization punch creation
+        frappe.flags.in_regularization_approval = True
+
+        activity_date = exc["activity_date"]
+        req_status = exc.get("requested_status") or "Present"
+
+        parsed_in = _parse_time_val(exc.get("requested_in_time"))
+        if parsed_in:
+            in_dt = datetime.datetime.combine(activity_date, parsed_in)
+            existing_in = frappe.db.sql(
+                "SELECT name FROM `tabEmployee Checkin` WHERE employee = %(employee)s AND time = %(time)s",
+                {"employee": target_emp, "time": in_dt}
+            )
+            if not existing_in:
+                in_punch = frappe.get_doc({
+                    "doctype": "Employee Checkin",
+                    "employee": target_emp,
+                    "time": in_dt,
+                    "log_type": "IN",
+                    "source": "Admin Correction",
+                    "source_record_id": exception_id,
+                    "device_info": f"Regularization approved by {resolved_by}: {resolution_comments}"
+                })
+                in_punch.flags.ignore_permissions = True
+                in_punch.insert()
+
+        parsed_out = _parse_time_val(exc.get("requested_out_time"))
+        if parsed_out:
+            out_dt = datetime.datetime.combine(activity_date, parsed_out)
+            existing_out = frappe.db.sql(
+                "SELECT name FROM `tabEmployee Checkin` WHERE employee = %(employee)s AND time = %(time)s",
+                {"employee": target_emp, "time": out_dt}
+            )
+            if not existing_out:
+                out_punch = frappe.get_doc({
+                    "doctype": "Employee Checkin",
+                    "employee": target_emp,
+                    "time": out_dt,
+                    "log_type": "OUT",
+                    "source": "Admin Correction",
+                    "source_record_id": exception_id,
+                    "device_info": f"Regularization approved by {resolved_by}: {resolution_comments}"
+                })
+                out_punch.flags.ignore_permissions = True
+                out_punch.insert()
+
+        # Update Attendance Exception status
         frappe.db.set_value(
-            "Employee Activity Log",
-            eal_name,
+            "Attendance Exception",
+            exception_id,
             {
-                "attendance_status": req_status,
-                "is_regularized": 1,
-                "regularization_exception": exception_id
+                "status": "Resolved",
+                "resolved_by": resolved_by,
+                "resolved_at": now,
+                "resolution_comments": resolution_comments
             }
         )
 
-    frappe.db.commit()
+        # Update matching Attendance Correction Request if present
+        if frappe.db.exists("Attendance Correction Request", exception_id):
+            frappe.db.set_value(
+                "Attendance Correction Request",
+                exception_id,
+                {
+                    "status": "Approved",
+                    "resolved_by": resolved_by,
+                    "resolved_at": now,
+                    "resolution_comments": resolution_comments
+                }
+            )
+
+        # Mark Employee Activity Log regularized
+        eal_name = frappe.db.get_value(
+            "Employee Activity Log",
+            {"employee": target_emp, "activity_date": activity_date},
+            "name"
+        )
+        if eal_name:
+            frappe.db.set_value(
+                "Employee Activity Log",
+                eal_name,
+                {
+                    "attendance_status": req_status,
+                    "is_regularized": 1,
+                    "regularization_exception": exception_id
+                }
+            )
+
+        recalculate_daily_summary(target_emp, activity_date)
+        frappe.db.commit()
+    finally:
+        frappe.flags.in_regularization_approval = False
 
     return {
         "message": "Attendance exception approved and regularized successfully",
@@ -449,7 +531,7 @@ def approve_attendance_exception(exception_id: str, comments: Optional[str] = No
 def reject_attendance_exception(exception_id: str, comments: Optional[str] = None):
     """
     Manager or CEO rejection of an attendance regularization request.
-    Preserves audit reason and leaves the daily summary unchanged.
+    Preserves audit reason and locks record against concurrent double-processing.
     """
     if not exception_id:
         frappe.throw(_("Exception ID is required"), frappe.MandatoryError)
@@ -457,19 +539,29 @@ def reject_attendance_exception(exception_id: str, comments: Optional[str] = Non
     user, _ = get_session_user_and_roles()
     current_emp = get_current_employee_id()
 
-    exc = frappe.db.get_value(
-        "Attendance Exception",
-        exception_id,
-        ["name", "employee", "status"],
+    # Lock exception record for update
+    exc_rows = frappe.db.sql(
+        """
+        SELECT name, employee, status
+        FROM `tabAttendance Exception`
+        WHERE name = %s
+        FOR UPDATE;
+        """,
+        (exception_id,),
         as_dict=True
     )
-    if not exc:
-        frappe.throw(_("Attendance exception {0} not found").format(exception_id), frappe.ValidationError)
+    if not exc_rows:
+        frappe.throw(_("Attendance exception {0} not found").format(exception_id), frappe.DoesNotExistError)
+
+    exc = exc_rows[0]
+
+    if exc["status"] in ("Resolved", "Ignored", "Approved", "Rejected"):
+        frappe.throw(
+            _("This exception has already been processed with status '{0}'").format(exc["status"]),
+            frappe.ValidationError
+        )
 
     assert_can_manage_employee(exc["employee"])
-
-    if exc["status"] in ("Resolved", "Ignored"):
-        frappe.throw(_("Exception is already {0}").format(exc["status"]), frappe.ValidationError)
 
     now = now_datetime()
     resolved_by = current_emp or user
@@ -485,6 +577,19 @@ def reject_attendance_exception(exception_id: str, comments: Optional[str] = Non
             "resolution_comments": resolution_comments
         }
     )
+
+    if frappe.db.exists("Attendance Correction Request", exception_id):
+        frappe.db.set_value(
+            "Attendance Correction Request",
+            exception_id,
+            {
+                "status": "Rejected",
+                "resolved_by": resolved_by,
+                "resolved_at": now,
+                "resolution_comments": resolution_comments
+            }
+        )
+
     frappe.db.commit()
 
     return {

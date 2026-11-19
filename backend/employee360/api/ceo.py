@@ -16,6 +16,12 @@ def require_ceo():
 
 
 @frappe.whitelist()
+def get_company_kpis(target_date: Optional[str] = None):
+    """Whitelisted alias for get_company_dashboard_summary."""
+    return get_company_dashboard_summary(target_date=target_date)
+
+
+@frappe.whitelist()
 def get_company_dashboard_summary(target_date: Optional[str] = None):
     """
     Company-wide attendance KPI card metrics for a single calendar date.

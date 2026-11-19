@@ -7,21 +7,27 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from frappe_runtime import _current_user_var
-from employee360.api import ceo, employee
+try:
+    import frappe
+except ImportError:
+    frappe = None
+
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
+
+if frappe is not None:
+    from employee360.api import ceo, employee
 
 class TestAnalyticsIntegration(unittest.TestCase):
     def setUp(self):
         # Authenticate as CEO for access across all employees and company metrics
         self.ceo_user = "ceo@employee360.local"
         self.emp_id = "EMP-01362"  # Elena Rostova
-        self.token = _current_user_var.set(self.ceo_user)
+        frappe.set_user(self.ceo_user)
 
     def tearDown(self):
-        _current_user_var.reset(self.token)
+        frappe.set_user("Administrator")
 
     def test_01_average_daily_duration(self):
         """Test calculation of average daily working duration in Employee Summary."""

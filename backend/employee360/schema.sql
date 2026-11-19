@@ -82,11 +82,12 @@ CREATE TABLE IF NOT EXISTS `tabEmployee Activity Log` (
   `first_login` TIME DEFAULT NULL,
   `last_logout` TIME DEFAULT NULL,
   `total_work_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
-  `active_seconds` INT UNSIGNED NOT NULL DEFAULT 0,
+  `active_seconds` INT UNSIGNED DEFAULT NULL,
   `total_sessions` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   `calculated_at` DATETIME NOT NULL,
   `is_regularized` TINYINT(1) NOT NULL DEFAULT 0,
   `regularization_exception` VARCHAR(140) DEFAULT NULL,
+  `is_synthetic` TINYINT(1) NOT NULL DEFAULT 0,
   -- Exactly one record per employee per date
   UNIQUE KEY `uk_eal_emp_date` (`employee`, `activity_date`),
   -- Composite indexes for high performance aggregations across 10.95M rows

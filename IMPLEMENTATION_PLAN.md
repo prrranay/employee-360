@@ -21,7 +21,7 @@
   * Reclaimable Docker build cache and volumes were inspected and pruned to preserve disk headroom.
 
 ### 1.3 Backend Inspection
-* **Frappe Version:** Greenfield — Frappe v15 / Python 3.11 target architecture to be bootstrapped.
+* **Frappe Version:** Frappe Framework v14 (specifically v14.22.0) with Python 3.10+ and MariaDB 10.6.
 * **Installed Applications:** None currently present.
 * **Existing DocTypes & Schemas:** None in the local workspace.
 * **Existing Controllers & API Methods:** None.
@@ -392,10 +392,18 @@ Milestone 5: Frontend Development (React + Vite + TypeScript + Tailwind)
   ├── Build Employee Portal with one-click punch, status card, & history table
   └── Wire up Frappe session authentication & API client
 
-Milestone 6: System Verification, Benchmarking & Documentation
-  ├── Perform query latency benchmarks on the 10.95M dataset
+Milestone 6: System Verification, Benchmarking & Documentation [COMPLETED]
+  ├── Perform query latency benchmarks on the 10.95M dataset (p50: 3ms - 148ms)
   ├── Document verification results, API reference, and start commands
   └── Final delivery walkthrough
+
+Milestone 7: Test Infrastructure, Security Hardening & Non-Destructive QA [COMPLETED]
+  ├── Eliminate dangerous automatic test cleanup from run_all_tests.py
+  ├── Implement strict safety guards & disposable site verification in clean_test_records.py
+  ├── Repair master test runner with cross-platform execution (shell=False, relative paths)
+  ├── Resolve frontend TypeScript typecheck and Vitest configuration (12 tests passed)
+  ├── Maintain 100% test pass rate across all 12 test suites (116 checks)
+  └── Publish FINAL_VERIFICATION_REPORT.md with explicit acceptance criteria statuses
 ```
 
 ---

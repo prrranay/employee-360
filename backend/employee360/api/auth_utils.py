@@ -124,10 +124,15 @@ def assert_can_manage_employee(target_emp_id: str):
 @frappe.whitelist()
 def get_session_user_and_roles_api():
     """
-    Public Frappe API endpoint: returns the authenticated user, their roles, and linked employee.
+    Public Frappe API endpoint: returns the authenticated user, their roles, linked employee, and CSRF token.
     Callable at: /api/method/employee360.api.auth_utils.get_session_user_and_roles_api
     """
+    from frappe.sessions import get_csrf_token
     user, roles = get_session_user_and_roles()
+    csrf_token = get_csrf_token()
+    if getattr(frappe.local, "cookie_manager", None):
+        frappe.local.cookie_manager.set_cookie("csrf_token", csrf_token)
+
     emp_id = get_current_employee_id()
     emp_dict = None
     if emp_id:
@@ -148,5 +153,6 @@ def get_session_user_and_roles_api():
     return {
         "user": user,
         "roles": roles,
-        "employee": emp_dict
+        "employee": emp_dict,
+        "csrf_token": csrf_token
     }

@@ -5,10 +5,11 @@ import pymysql
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from employee360.seed.runner import get_db_connection
 
+
 def reset_database(force: bool = False):
     """
     Safely resets development/test database tables.
-    Never runs in production.
+    Requires explicit '--force-dev-reset' or ALLOW_DEV_RESET=1 environment variable.
     """
     if not force and "--force-dev-reset" not in sys.argv and os.environ.get("ALLOW_DEV_RESET") != "1":
         print("[!] Safety Block: Database reset requires '--force-dev-reset' or ALLOW_DEV_RESET=1")
@@ -21,6 +22,7 @@ def reset_database(force: bool = False):
 
     tables = [
         "tabAttendance Exception",
+        "tabAttendance Correction Request",
         "tabLeave Application",
         "tabEmployee Checkin",
         "tabEmployee Activity Log",
@@ -45,6 +47,6 @@ def reset_database(force: bool = False):
         cursor.close()
         conn.close()
 
+
 if __name__ == "__main__":
     reset_database()
-

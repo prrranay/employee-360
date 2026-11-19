@@ -38,7 +38,7 @@ export const SearchAutocomplete: React.FC<SearchAutocompleteProps> = ({
           setResults(data || []);
           setIsOpen(true);
         }
-      } catch (err) {
+      } catch {
         if (active) setResults([]);
       } finally {
         if (active) setIsLoading(false);

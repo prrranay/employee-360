@@ -16,7 +16,8 @@
     "total_sessions",
     "calculated_at",
     "is_regularized",
-    "regularization_exception"
+    "regularization_exception",
+    "is_synthetic"
   ],
   "fields": [
     {
@@ -65,7 +66,7 @@
       "label": "Total Work Seconds"
     },
     {
-      "default": "0",
+      "description": "Active computer usage duration in seconds (unmeasured / reserved for future endpoint telemetry)",
       "fieldname": "active_seconds",
       "fieldtype": "Int",
       "label": "Active Seconds"
@@ -94,6 +95,12 @@
       "fieldtype": "Link",
       "label": "Regularization Exception",
       "options": "Attendance Exception"
+    },
+    {
+      "default": "0",
+      "fieldname": "is_synthetic",
+      "fieldtype": "Check",
+      "label": "Is Synthetic Historical Record"
     }
   ],
   "index_web_pages_for_search": 0,

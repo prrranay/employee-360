@@ -10,9 +10,19 @@ if BACKEND_DIR not in sys.path:
 from employee360.seed.config import SeedConfig
 from employee360.seed.runner import get_db_connection
 
+def setUpModule():
+    try:
+        conn = get_db_connection()
+        conn.close()
+    except Exception as e:
+        raise unittest.SkipTest(f"Database connection unavailable: {e}")
+
 class TestSyntheticSeedIntegration(unittest.TestCase):
     def setUp(self):
-        self.conn = get_db_connection()
+        try:
+            self.conn = get_db_connection()
+        except Exception as e:
+            raise unittest.SkipTest(f"Database connection unavailable: {e}")
 
     def tearDown(self):
         if self.conn:

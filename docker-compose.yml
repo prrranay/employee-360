@@ -58,7 +58,7 @@ services:
     volumes:
       - redis_queue_data:/data
 
-  # ─── Frappe Web Server (Gunicorn / Bench) ──────────────────────────────────
+  # ─── Frappe Web Server (bench serve) ──────────────────────────────────
   frappe:
     image: frappe/erpnext-worker:v14
     container_name: employee360_frappe
@@ -80,6 +80,7 @@ services:
       - PYTHONPATH=/home/frappe/frappe-bench/apps/employee360
     volumes:
       - ./backend:/home/frappe/frappe-bench/apps/employee360
+      - ./scripts:/home/frappe/frappe-bench/scripts
       - bench_sites:/home/frappe/frappe-bench/sites
       - bench_logs:/home/frappe/frappe-bench/logs
     ports:
@@ -159,7 +160,9 @@ services:
       - "5173:5173"
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_BACKEND_URL=http://frappe:8000
+      - BACKEND_URL=http://frappe:8000
+      - VITE_API_BASE_URL=http://frappe:8000
 
 volumes:
   mariadb_data:

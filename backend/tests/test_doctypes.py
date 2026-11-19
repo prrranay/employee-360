@@ -11,27 +11,38 @@ if BACKEND_DIR not in sys.path:
 try:
     import frappe
 except ImportError:
-    import frappe_runtime
-    frappe_runtime.install_frappe_compat()
-    import frappe
+    frappe = None
 
-# Setup mock site for Frappe context
-tmp_dir = tempfile.gettempdir()
-site_dir = os.path.join(tmp_dir, "test_site")
-os.makedirs(site_dir, exist_ok=True)
-with open(os.path.join(tmp_dir, "apps.txt"), "w") as f:
-    f.write("frappe\n")
-with open(os.path.join(site_dir, "site_config.json"), "w") as f:
-    f.write('{"db_name": "test_db", "db_password": "test"}')
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
 
-try:
-    frappe.init(site="test_site", sites_path=tmp_dir)
-except Exception:
-    pass
+# Setup Frappe context: use bench site if available, else temporary test site
+if frappe is not None:
+    bench_sites = "/home/frappe/frappe-bench/sites"
+    if os.path.exists(os.path.join(bench_sites, "employee360.localhost")):
+        try:
+            frappe.init(site="employee360.localhost", sites_path=bench_sites)
+            frappe.connect()
+        except Exception:
+            pass
+    elif not getattr(frappe.local, "site", None):
+        tmp_dir = tempfile.gettempdir()
+        site_dir = os.path.join(tmp_dir, "test_site")
+        os.makedirs(site_dir, exist_ok=True)
+        with open(os.path.join(tmp_dir, "apps.txt"), "w") as f:
+            f.write("frappe\n")
+        with open(os.path.join(site_dir, "site_config.json"), "w") as f:
+            f.write('{"db_name": "test_db", "db_password": "test"}')
 
-frappe.local = getattr(frappe, "local", frappe._dict())
-frappe.local.conf = frappe._dict({"developer_mode": 1})
-frappe.local.flags = frappe._dict()
+        try:
+            frappe.init(site="test_site", sites_path=tmp_dir)
+        except Exception:
+            pass
+
+        frappe.local = getattr(frappe, "local", frappe._dict())
+        frappe.local.conf = frappe._dict({"developer_mode": 1})
+        frappe.local.flags = frappe._dict()
 
 class DummyMeta:
     def get_table_fields(self):
@@ -48,14 +59,17 @@ class TestDocTypes(unittest.TestCase):
         self.mock_db = MagicMock()
         self.mock_db.get_single_value.return_value = "UTC"
         self.mock_db.get_system_setting.return_value = "UTC"
-        frappe.local.db = self.mock_db
         self.orig_db = getattr(frappe, "db", None)
+        self.orig_local_db = getattr(frappe.local, "db", None) if hasattr(frappe, "local") else None
+        frappe.local.db = self.mock_db
         frappe.db = self.mock_db
 
     def tearDown(self):
         self.meta_patcher.stop()
         if self.orig_db is not None:
             frappe.db = self.orig_db
+        if self.orig_local_db is not None:
+            frappe.local.db = self.orig_local_db
 
     def test_employee_cannot_be_own_manager(self):
         """Test rule: An employee cannot be their own manager."""

@@ -47,7 +47,7 @@ export interface ActivityLogRecord {
   first_login: string | null;
   last_logout: string | null;
   total_work_seconds: number;
-  active_seconds: number;
+  active_seconds?: number | null;
   total_sessions: number;
   calculated_at: string;
 }

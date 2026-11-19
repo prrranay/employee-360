@@ -2,18 +2,31 @@ import sys
 import os
 import unittest
 import json
-import pymysql
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
-sys.path.insert(0, BACKEND_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from frappe_runtime import _current_user_var, PermissionError, AuthenticationError, ValidationError
+try:
+    import frappe
+    from frappe.exceptions import PermissionError, AuthenticationError, ValidationError
+except ImportError:
+    frappe = None
 
-from employee360.api import auth_utils, ceo, manager, employee, attendance
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run scripts inside Frappe Bench or the Frappe Docker container.")
+
+if frappe is not None:
+    if not getattr(frappe, "db", None) or not frappe.db:
+        try:
+            frappe.init(site="employee360.localhost")
+            frappe.connect()
+        except Exception:
+            pass
+
+    from employee360.api import auth_utils, ceo, manager, employee, attendance
 
 class SecurityAuditTest(unittest.TestCase):
     @classmethod
@@ -24,17 +37,15 @@ class SecurityAuditTest(unittest.TestCase):
         cls.emp1_id = "EMP-01362"
 
     def setUp(self):
-        self.token = _current_user_var.set("Guest")
+        frappe.set_user("Guest")
 
     def tearDown(self):
-        _current_user_var.reset(self.token)
+        frappe.set_user("Administrator")
 
     # 1. AUTHENTICATION & SESSION MANAGEMENT
     def test_01_authentication_flow_and_rejection(self):
         """Test authentication accepts valid credentials, rejects bad credentials, and blocks disabled users."""
-        import server
-        
-        # Valid login simulation in server
+        # Valid user check
         user_rows = frappe.db.sql("SELECT name, enabled FROM `tabUser` WHERE name = %s", (self.ceo_user,), as_dict=True)
         self.assertTrue(len(user_rows) == 1)
         self.assertEqual(user_rows[0]["enabled"], 1)
@@ -50,7 +61,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 2. SERVER-SIDE AUTHORIZATION & ROLE ISOLATION
     def test_02_guest_access_rejection(self):
         """Test Guest requests are rejected by all protected API endpoints."""
-        _current_user_var.set("Guest")
+        frappe.set_user("Guest")
         
         with self.assertRaises((PermissionError, AuthenticationError)):
             ceo.get_company_dashboard_summary()
@@ -63,7 +74,7 @@ class SecurityAuditTest(unittest.TestCase):
 
     def test_03_employee_role_boundary_enforcement(self):
         """Test Employee cannot access administrative CEO or Manager endpoints."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
 
         with self.assertRaises(PermissionError) as ctx:
             ceo.get_company_dashboard_summary()
@@ -75,7 +86,7 @@ class SecurityAuditTest(unittest.TestCase):
 
     def test_04_manager_cross_hierarchy_isolation(self):
         """Test Manager cannot view attendance or activity of employees outside their managerial subtree."""
-        _current_user_var.set(self.mgr1_user)
+        frappe.set_user(self.mgr1_user)
 
         # Find an employee that does NOT report to Manager 1
         mgr1_emp_id = auth_utils.get_current_employee_id()
@@ -94,7 +105,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 3. ANTI-SELF-APPROVAL ENFORCEMENT
     def test_05_strict_anti_self_approval(self):
         """Test Manager cannot approve their own leave request."""
-        _current_user_var.set(self.mgr1_user)
+        frappe.set_user(self.mgr1_user)
 
         # Apply for personal leave
         leave_res = employee.apply_leave_application(
@@ -116,7 +127,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 4. SQL INJECTION AUDIT
     def test_06_sql_injection_resistance_search(self):
         """Test Autocomplete Search resists classic SQL injection payloads."""
-        _current_user_var.set(self.ceo_user)
+        frappe.set_user(self.ceo_user)
         
         payloads = [
             "' OR '1'='1",
@@ -133,7 +144,7 @@ class SecurityAuditTest(unittest.TestCase):
 
     def test_07_sql_injection_resistance_date_and_activity(self):
         """Test Date and Activity endpoints resist SQL injection payloads."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
 
         # Parameterized queries ensure bad string is escaped or raises ValidationError
         payload = "EMP-01362' OR '1'='1"
@@ -143,7 +154,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 5. INPUT VALIDATION & BOUNDARY DEFENSE
     def test_08_pagination_boundaries_defense(self):
         """Test negative or extreme pagination parameters are safely clamped."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
 
         # Negative page and oversized page_size
         res = employee.get_employee_activity(self.emp1_id, page=-10, page_size=99999)
@@ -154,7 +165,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 6. SENSITIVE DATA EXPOSURE
     def test_09_no_sensitive_credentials_in_api_payloads(self):
         """Test Password hashes, session secrets, and salts are never leaked in employee profiles."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
         
         prof = employee.get_employee_profile(self.emp1_id)
         forbidden_fields = ["password", "pwd", "hash", "salt", "secret", "auth_token", "api_secret"]
@@ -163,7 +174,7 @@ class SecurityAuditTest(unittest.TestCase):
 
     def test_10_gps_location_privacy(self):
         """Test Precise GPS coordinates (latitude/longitude) are not leaked in general attendance summary."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
         
         today_att = attendance.get_today_attendance()
         # Punches returned in today attendance summary must only expose accuracy/device, not continuous GPS tracking
@@ -177,7 +188,7 @@ class SecurityAuditTest(unittest.TestCase):
     # 7. REGULARIZATION AUDIT LOGGING
     def test_11_regularization_audit_trail_immutability(self):
         """Test attendance regularization creates an immutable audit record with source='Admin Correction'."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
         target_date = "2026-10-06"
         frappe.db.sql(f"DELETE FROM `tabEmployee Checkin` WHERE employee = '{self.emp1_id}' AND source = 'Admin Correction';")
         frappe.db.commit()
@@ -194,7 +205,7 @@ class SecurityAuditTest(unittest.TestCase):
 
         try:
             # Manager approves
-            _current_user_var.set(self.mgr1_user)
+            frappe.set_user(self.mgr1_user)
             app_res = attendance.approve_attendance_exception(
                 exception_id=exc_id,
                 comments="Security audit approval with full audit trail"

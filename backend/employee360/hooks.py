@@ -12,7 +12,7 @@ required_apps = []
 # Document Events
 doc_events = {
     "Employee Checkin": {
-        "on_update": "employee360.doctype.employee_checkin.employee_checkin.EmployeeCheckin.trigger_daily_summary_recalculation"
+        "on_update": "employee360.doctype.employee_checkin.employee_checkin.on_checkin_update"
     }
 }
 

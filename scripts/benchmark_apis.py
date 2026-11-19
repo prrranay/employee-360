@@ -6,12 +6,21 @@ import tracemalloc
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
-sys.path.insert(0, BACKEND_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from frappe_runtime import _current_user_var
+try:
+    import frappe
+except ImportError:
+    print("ERROR: Genuine Frappe Framework is not installed in this environment. Run inside Frappe Bench or the Frappe Docker container.")
+    sys.exit(1)
+
+if not getattr(frappe, "db", None) or not frappe.db:
+    try:
+        frappe.init(site="employee360.localhost")
+        frappe.connect()
+    except Exception as e:
+        print(f"Warning: Frappe could not connect to database: {e}")
 
 from employee360.api import ceo, manager, employee, attendance
 
@@ -26,7 +35,7 @@ def benchmark_function(name, func, args=(), kwargs=None, iterations=50, user=Non
         kwargs = {}
     
     if user:
-        _current_user_var.set(user)
+        frappe.set_user(user)
         
     latencies = []
     tracemalloc.start()
@@ -121,4 +130,3 @@ with open("benchmark_api_results.json", "w") as f:
     json.dump(results, f, indent=2)
 
 print("\nSaved benchmark results to benchmark_api_results.json")
-

@@ -324,22 +324,29 @@ def approve_leave_application(leave_id: str, comments: Optional[str] = None):
     """
     Approves a team member's leave application.
     Security: Strictly validates managerial hierarchy and prevents self-approval.
+    Uses row-level locking to prevent concurrent double-approvals.
     """
     require_manager()
     if not leave_id:
         frappe.throw(_("Leave application ID is required"), frappe.MandatoryError)
 
-    leave_doc = frappe.get_doc("Leave Application", leave_id)
-    if not leave_doc:
+    leave_rows = frappe.db.sql(
+        "SELECT name, employee, status, from_date, to_date FROM `tabLeave Application` WHERE name = %s FOR UPDATE;",
+        (leave_id,),
+        as_dict=True
+    )
+    if not leave_rows:
         frappe.throw(_("Leave application not found"), frappe.DoesNotExistError)
 
-    if leave_doc.status != "Pending":
-        frappe.throw(_("Leave application is already {0}").format(leave_doc.status), frappe.ValidationError)
+    leave_row = leave_rows[0]
+    if leave_row["status"] != "Pending":
+        frappe.throw(_("Leave application is already {0}").format(leave_row["status"]), frappe.ValidationError)
 
     # Security check: must manage employee and cannot approve self
-    assert_can_manage_employee(leave_doc.employee)
+    assert_can_manage_employee(leave_row["employee"])
 
     current_emp = get_current_employee_id()
+    leave_doc = frappe.get_doc("Leave Application", leave_id)
     leave_doc.status = "Approved"
     leave_doc.approver = current_emp
     leave_doc.approval_comments = comments or "Approved"
@@ -354,6 +361,7 @@ def approve_leave_application(leave_id: str, comments: Optional[str] = None):
         recalculate_daily_summary(leave_doc.employee, curr)
         curr += datetime.timedelta(days=1)
 
+    frappe.db.commit()
     return {"message": "Leave application approved successfully", "leave_id": leave_doc.name, "status": "Approved"}
 
 
@@ -362,27 +370,35 @@ def reject_leave_application(leave_id: str, comments: Optional[str] = None):
     """
     Rejects a team member's leave application.
     Security: Strictly validates managerial hierarchy and prevents self-rejection.
+    Uses row-level locking to prevent concurrent double-rejections.
     """
     require_manager()
     if not leave_id:
         frappe.throw(_("Leave application ID is required"), frappe.MandatoryError)
 
-    leave_doc = frappe.get_doc("Leave Application", leave_id)
-    if not leave_doc:
+    leave_rows = frappe.db.sql(
+        "SELECT name, employee, status FROM `tabLeave Application` WHERE name = %s FOR UPDATE;",
+        (leave_id,),
+        as_dict=True
+    )
+    if not leave_rows:
         frappe.throw(_("Leave application not found"), frappe.DoesNotExistError)
 
-    if leave_doc.status != "Pending":
-        frappe.throw(_("Leave application is already {0}").format(leave_doc.status), frappe.ValidationError)
+    leave_row = leave_rows[0]
+    if leave_row["status"] != "Pending":
+        frappe.throw(_("Leave application is already {0}").format(leave_row["status"]), frappe.ValidationError)
 
-    assert_can_manage_employee(leave_doc.employee)
+    assert_can_manage_employee(leave_row["employee"])
 
     current_emp = get_current_employee_id()
+    leave_doc = frappe.get_doc("Leave Application", leave_id)
     leave_doc.status = "Rejected"
     leave_doc.approver = current_emp
     leave_doc.approval_comments = comments or "Rejected"
     leave_doc.decision_at = now_datetime()
     leave_doc.save(ignore_permissions=True)
 
+    frappe.db.commit()
     return {"message": "Leave application rejected", "leave_id": leave_doc.name, "status": "Rejected"}
 
 

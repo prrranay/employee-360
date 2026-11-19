@@ -9,10 +9,17 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from employee360.doctype.employee.employee import Employee
+try:
+    import frappe
+except ImportError:
+    frappe = None
+
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
+
+if frappe is not None:
+    from employee360.doctype.employee.employee import Employee
 
 class TestEmployeeIntegration(unittest.TestCase):
     def setUp(self):

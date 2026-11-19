@@ -8,11 +8,17 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from frappe_runtime import _current_user_var
-from employee360.api import ceo, manager, employee, auth_utils
+try:
+    import frappe
+except ImportError:
+    frappe = None
+
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
+
+if frappe is not None:
+    from employee360.api import ceo, manager, employee, auth_utils
 
 class TestPermissionsIntegration(unittest.TestCase):
     def setUp(self):
@@ -31,11 +37,11 @@ class TestPermissionsIntegration(unittest.TestCase):
         self.emp2_id = "EMP-01400"
 
     def tearDown(self):
-        _current_user_var.set("Guest")
+        frappe.set_user("Administrator")
 
     def test_01_ceo_company_wide_access(self):
         """Test CEO Access: CEO can access company-wide summaries, any employee overview, and department analytics."""
-        _current_user_var.set(self.ceo_user)
+        frappe.set_user(self.ceo_user)
         
         # 1. Company dashboard summary
         summary = ceo.get_company_dashboard_summary()
@@ -57,7 +63,7 @@ class TestPermissionsIntegration(unittest.TestCase):
 
     def test_02_manager_authorized_reports_access(self):
         """Test Manager Access: Manager can access authorized team reports and summaries."""
-        _current_user_var.set(self.mgr1_user)
+        frappe.set_user(self.mgr1_user)
         
         # Team summary
         team_summary = manager.get_team_dashboard_summary()
@@ -75,7 +81,7 @@ class TestPermissionsIntegration(unittest.TestCase):
 
     def test_03_manager_cannot_access_unrelated_employees(self):
         """Test Security: Manager cannot access employees outside their reporting hierarchy."""
-        _current_user_var.set(self.mgr1_user)
+        frappe.set_user(self.mgr1_user)
         
         # Find an employee NOT in manager1's team
         unrelated = frappe.db.sql(f"""
@@ -96,7 +102,7 @@ class TestPermissionsIntegration(unittest.TestCase):
 
     def test_04_employee_can_access_only_personal_data(self):
         """Test Security: Individual contributor can only access their own profile and attendance records."""
-        _current_user_var.set(self.emp1_user)
+        frappe.set_user(self.emp1_user)
         
         # 1. Accessing own profile works
         own_prof = employee.get_employee_profile(self.emp1_id)
@@ -117,7 +123,7 @@ class TestPermissionsIntegration(unittest.TestCase):
 
     def test_05_employee_cannot_approve_their_own_leave(self):
         """Test Security: Strict enforcement of anti-self-approval rule."""
-        _current_user_var.set(self.mgr1_user)
+        frappe.set_user(self.mgr1_user)
 
         # Manager1 applies for leave
         leave_res = employee.apply_leave_application(
@@ -138,7 +144,7 @@ class TestPermissionsIntegration(unittest.TestCase):
 
     def test_06_unauthorized_guest_requests_rejected(self):
         """Test Security: Unauthenticated 'Guest' requests to protected endpoints are rejected."""
-        _current_user_var.set("Guest")
+        frappe.set_user("Guest")
 
         # 1. Current employee
         with self.assertRaises(frappe.AuthenticationError):

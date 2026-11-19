@@ -426,7 +426,8 @@ def apply_leave_application(
         WHERE employee = %(employee)s
           AND status IN ('Approved', 'Pending')
           AND NOT (to_date < %(from_date)s OR from_date > %(to_date)s)
-        LIMIT 1;
+        LIMIT 1
+        FOR UPDATE;
         """,
         {"employee": emp_id, "from_date": from_dt, "to_date": to_dt},
         as_dict=True
@@ -520,3 +521,10 @@ def cancel_leave_application(leave_id: str):
         "leave_id": leave_id,
         "status": "Cancelled"
     }
+
+
+@frappe.whitelist()
+def get_employee_correction_requests():
+    """Returns submitted attendance correction requests for the authenticated employee."""
+    from employee360.api.attendance import get_my_correction_requests
+    return get_my_correction_requests()

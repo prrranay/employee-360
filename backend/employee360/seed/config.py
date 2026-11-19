@@ -1,15 +1,17 @@
 import datetime
+import os
 
 class SeedConfig:
-    # Scale targets
-    TOTAL_EMPLOYEES: int = 30000
+    # Scale targets (dynamically configurable for staged validation, default 30,000 / 10,950,000)
+    TOTAL_EMPLOYEES: int = int(os.environ.get("SEED_TOTAL_EMPLOYEES", 30000))
     DAYS_PER_EMPLOYEE: int = 365
-    TOTAL_ACTIVITY_RECORDS: int = 10950000  # 30,000 * 365
+    TOTAL_ACTIVITY_RECORDS: int = TOTAL_EMPLOYEES * DAYS_PER_EMPLOYEE
 
     # Batching & Performance
-    BATCH_SIZE: int = 25000          # Records per transaction
-    SQL_CHUNK_SIZE: int = 5000       # Records per multi-value INSERT statement
+    BATCH_SIZE: int = int(os.environ.get("SEED_BATCH_SIZE", 25000))
+    SQL_CHUNK_SIZE: int = int(os.environ.get("SEED_CHUNK_SIZE", 5000))
     RANDOM_SEED: int = 42
+    GENERATE_RAW_PUNCHES: bool = bool(int(os.environ.get("SEED_GENERATE_RAW_PUNCHES", 0)))
 
     # Date range: 365 days ending yesterday (2026-11-16)
     END_DATE: datetime.date = datetime.date(2026, 11, 16)

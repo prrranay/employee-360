@@ -8,12 +8,18 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-import frappe_runtime
-frappe_runtime.install_frappe_compat()
-import frappe
-from frappe_runtime import _current_user_var
-from employee360.api import attendance, employee
-from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
+try:
+    import frappe
+except ImportError:
+    frappe = None
+
+def setUpModule():
+    if frappe is None:
+        raise unittest.SkipTest("Frappe Framework is not installed in the current environment. Run tests inside Frappe Bench or the Frappe Docker container.")
+
+if frappe is not None:
+    from employee360.api import attendance, employee
+    from employee360.doctype.employee_activity_log.employee_activity_log import recalculate_daily_summary
 
 class TestAttendanceIntegration(unittest.TestCase):
     def setUp(self):
@@ -21,7 +27,7 @@ class TestAttendanceIntegration(unittest.TestCase):
         self.emp_user = "emp1@employee360.local"
         self.emp_id = "EMP-01362"
         self.manager_user = "manager1@employee360.local"
-        self.token = _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         self.clear_debounce()
 
     def clear_debounce(self):
@@ -33,11 +39,11 @@ class TestAttendanceIntegration(unittest.TestCase):
         frappe.db.commit()
 
     def tearDown(self):
-        _current_user_var.reset(self.token)
+        frappe.set_user("Administrator")
 
     def test_01_checkin_flow(self):
         """Test Check-in records IN punch with server timestamp, trusted IP, and momentary GPS."""
-        _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         self.clear_debounce()
         today_att = attendance.get_today_attendance()
         if today_att["current_state"] == "Checked In":
@@ -62,7 +68,7 @@ class TestAttendanceIntegration(unittest.TestCase):
 
     def test_02_duplicate_checkin_prevention(self):
         """Test Duplicate Check-in: second consecutive IN punch without checkout throws ValidationError."""
-        _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         self.clear_debounce()
         today_att = attendance.get_today_attendance()
         if today_att["current_state"] != "Checked In":
@@ -76,7 +82,7 @@ class TestAttendanceIntegration(unittest.TestCase):
 
     def test_03_checkout_flow(self):
         """Test Check-out records OUT punch, closes open session, and calculates work duration."""
-        _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         self.clear_debounce()
         today_att = attendance.get_today_attendance()
         if today_att["current_state"] != "Checked In":
@@ -98,7 +104,7 @@ class TestAttendanceIntegration(unittest.TestCase):
 
     def test_04_invalid_checkout_prevention(self):
         """Test Invalid Check-out: Attempting to checkout when already checked out throws ValidationError."""
-        _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         self.clear_debounce()
         today_att = attendance.get_today_attendance()
         if today_att["current_state"] == "Checked In":
@@ -260,7 +266,7 @@ class TestAttendanceIntegration(unittest.TestCase):
     def test_11_attendance_correction_and_regularization(self):
         """Test Regularization: Employee requests correction on missed checkout, manager approves with audit trail."""
         # 1. Employee requests correction
-        _current_user_var.set(self.emp_user)
+        frappe.set_user(self.emp_user)
         target_date = "2026-10-06"  # The date from test_06 with missing checkout
         corr_res = attendance.request_attendance_correction(
             activity_date=target_date,
@@ -274,7 +280,7 @@ class TestAttendanceIntegration(unittest.TestCase):
         exc_id = corr_res["exception_id"]
 
         # 2. Manager reviews and approves exception
-        _current_user_var.set(self.manager_user)
+        frappe.set_user(self.manager_user)
         app_res = attendance.approve_attendance_exception(
             exception_id=exc_id,
             comments="Verified against facility access log and approved"

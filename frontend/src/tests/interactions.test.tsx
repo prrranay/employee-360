@@ -148,7 +148,7 @@ describe('User Interactions & UI State Components', () => {
   });
 
   it('LeaveApplyModal validates required fields and rejects submission without fields', async () => {
-    const { container } = render(
+    render(
       <QueryClientProvider client={createTestQueryClient()}>
         <LeaveApplyModal isOpen={true} onClose={vi.fn()} employeeId="EMP-01362" />
       </QueryClientProvider>

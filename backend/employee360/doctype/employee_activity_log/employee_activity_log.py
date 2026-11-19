@@ -94,7 +94,17 @@ def recalculate_daily_summary(employee: str, activity_date):
     total_sessions = 0
     missing_checkout = False
 
+    existing_row = frappe.db.get_value(
+        "Employee Activity Log",
+        {"employee": employee, "activity_date": activity_date},
+        ["name", "is_regularized", "attendance_status", "is_synthetic"],
+        as_dict=True
+    )
+
     if not punches:
+        if existing_row and existing_row.get("is_synthetic"):
+            # Preserve seeded historical synthetic summary; do not wipe it out
+            return existing_row["name"]
         if leave:
             status = "On Leave"
         elif is_weekly_off:
@@ -172,13 +182,17 @@ def recalculate_daily_summary(employee: str, activity_date):
     calc_time = now_datetime()
     name = f"EAL-{employee}-{activity_date.strftime('%Y%m%d')}"
 
-    existing_doc = frappe.db.get_value(
+    existing_row = frappe.db.get_value(
         "Employee Activity Log",
         {"employee": employee, "activity_date": activity_date},
-        "name"
+        ["name", "is_regularized", "attendance_status"],
+        as_dict=True
     )
 
-    if existing_doc:
+    if existing_row:
+        existing_doc = existing_row["name"]
+        # Preserve approved regularized status across background recalculations
+        final_status = existing_row["attendance_status"] if existing_row.get("is_regularized") else status
         frappe.db.set_value(
             "Employee Activity Log",
             existing_doc,
@@ -186,9 +200,9 @@ def recalculate_daily_summary(employee: str, activity_date):
                 "first_login": first_login,
                 "last_logout": last_logout,
                 "total_work_seconds": total_work_seconds,
-                "active_seconds": total_work_seconds,
+                "active_seconds": None,
                 "total_sessions": total_sessions,
-                "attendance_status": status,
+                "attendance_status": final_status,
                 "calculated_at": calc_time
             },
             update_modified=True
@@ -203,7 +217,7 @@ def recalculate_daily_summary(employee: str, activity_date):
             "first_login": first_login,
             "last_logout": last_logout,
             "total_work_seconds": total_work_seconds,
-            "active_seconds": total_work_seconds,
+            "active_seconds": None,
             "total_sessions": total_sessions,
             "attendance_status": status,
             "calculated_at": calc_time

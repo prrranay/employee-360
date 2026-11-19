@@ -11,6 +11,7 @@ from employee360.seed.config import SeedConfig
 from employee360.seed.generator import (
     generate_all_employees,
     generate_shift_data,
+    generate_all_leave_applications,
     stream_activity_log_batches,
 )
 
@@ -21,168 +22,291 @@ DB_CONFIG = {
     "password": os.environ.get("MARIADB_PASSWORD", "root"),
     "database": os.environ.get("MARIADB_DATABASE", "employee360"),
     "autocommit": False,
-    "charset": "utf8mb4"
+    "charset": "utf8mb4",
+    "connect_timeout": 3,
+    "read_timeout": 3,
+    "write_timeout": 3
 }
 
+
 def get_db_connection():
+    """
+    Dynamically connects using Frappe site_config if present,
+    falling back to environment / DB_CONFIG.
+    """
+    try:
+        import frappe
+        site = os.environ.get("FRAPPE_SITE", os.environ.get("FRAPPE_SITE_NAME", "employee360.localhost"))
+        sites_path = os.environ.get("SITES_PATH", "/home/frappe/frappe-bench/sites" if os.path.exists("/home/frappe/frappe-bench/sites") else None)
+        if not getattr(frappe, "conf", None) or not frappe.conf.get("db_name"):
+            frappe.init(site=site, sites_path=sites_path)
+
+        if frappe.conf and frappe.conf.get("db_name"):
+            return pymysql.connect(
+                host=frappe.conf.get("db_host") or os.environ.get("MARIADB_HOST", "mariadb"),
+                port=int(frappe.conf.get("db_port") or os.environ.get("MARIADB_PORT", 3306)),
+                user=frappe.conf.get("db_name"),
+                password=frappe.conf.get("db_password"),
+                database=frappe.conf.get("db_name"),
+                autocommit=False,
+                charset="utf8mb4",
+                connect_timeout=5
+            )
+    except Exception:
+        pass
+
     return pymysql.connect(**DB_CONFIG)
 
 
 def seed_shifts(cursor):
+    """Inserts default shift schedule."""
     shift = generate_shift_data()
     sql = """
     INSERT INTO `tabShift` (
-        `name`, `shift_name`, `start_time`, `end_time`, `grace_period_mins`,
+        `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+        `shift_name`, `start_time`, `end_time`, `grace_period_mins`,
         `expected_working_hours`, `weekly_off_days`, `applicable_departments`
     ) VALUES (
-        %(name)s, %(shift_name)s, %(start_time)s, %(end_time)s, %(grace_period_mins)s,
+        %(name)s, NOW(), NOW(), 'Administrator', 'Administrator', 0,
+        %(shift_name)s, %(start_time)s, %(end_time)s, %(grace_period_mins)s,
         %(expected_working_hours)s, %(weekly_off_days)s, %(applicable_departments)s
     ) ON DUPLICATE KEY UPDATE `shift_name` = VALUES(`shift_name`);
     """
     cursor.execute(sql, shift)
 
 
-def seed_demo_users(cursor, conn):
-    """Creates the 6 demo users plus Administrator required for testing CEO, Manager, and Employee dashboards."""
-    from passlib.hash import pbkdf2_sha256
-    print("[*] Seeding demo user authentication accounts with secure PBKDF2-SHA256 hashes...")
-    
-    # Hash password 'Admin123!' with PBKDF2-SHA256 (Frappe standard password hash)
-    pwd_hash = pbkdf2_sha256.hash("Admin123!")
+def seed_demo_users(cursor=None, conn=None):
+    """Creates demo users and ensures standard credentials using genuine Frappe User APIs."""
+    import frappe
+    from frappe.utils.password import update_password
 
-    all_users = list(SeedConfig.DEMO_USERS) + [
-        {
-            "email": "Administrator",
-            "name": "Administrator",
-            "role": "Administrator",
-            "employee_id": "EMP-00001",
-            "department": "Executive",
-            "designation": "System Administrator"
-        }
-    ]
+    if not getattr(frappe, "db", None) or not frappe.db:
+        site = os.environ.get("FRAPPE_SITE_NAME", "employee360.localhost")
+        sites_path = "/home/frappe/frappe-bench/sites" if os.path.exists("/home/frappe/frappe-bench/sites") else None
+        frappe.init(site=site, sites_path=sites_path)
+        frappe.connect()
 
-    for u in all_users:
+    demo_password = (
+        os.environ.get("DEMO_USER_PASSWORD")
+        or os.environ.get("ADMIN_PASSWORD")
+        or "Admin123!"
+    )
+
+    print("[*] Seeding demo user authentication accounts via genuine Frappe User API...")
+
+    # Ensure default shift exists
+    if not frappe.db.exists("Shift", "General Shift"):
+        s = frappe.new_doc("Shift")
+        s.shift_name = "General Shift"
+        s.name = "General Shift"
+        s.start_time = "09:00:00"
+        s.end_time = "18:00:00"
+        s.grace_period_mins = 15
+        s.expected_working_hours = 8.0
+        s.weekly_off_days = "Saturday, Sunday"
+        s.flags.ignore_permissions = True
+        s.insert()
+
+    mgr_map = {
+        "EMP-00001": None,
+        "EMP-00012": "EMP-00001",
+        "EMP-00013": "EMP-00001",
+        "EMP-01362": "EMP-00012",
+        "EMP-01363": "EMP-00012",
+        "EMP-01364": "EMP-00013"
+    }
+
+    for u in SeedConfig.DEMO_USERS:
+        emp_id = u["employee_id"]
+        emp_idx = int(emp_id.split("-")[1])
+        if emp_idx > SeedConfig.TOTAL_EMPLOYEES:
+            continue
+
+        email = u["email"]
         parts = u["name"].split(" ", 1)
         first_name = parts[0]
         last_name = parts[1] if len(parts) > 1 else ""
-        
-        # Upsert User with secure PBKDF2-SHA256 password hash
-        sql_user = """
-        INSERT INTO `tabUser` (
-            `name`, `email`, `first_name`, `last_name`, `full_name`, `password`, `enabled`, `user_type`
-        ) VALUES (
-            %(email)s, %(email)s, %(first)s, %(last)s, %(full)s, %(pwd)s, 1, 'System User'
-        ) ON DUPLICATE KEY UPDATE `full_name` = VALUES(`full_name`), `password` = VALUES(`password`), `enabled` = 1;
-        """
-        cursor.execute(sql_user, {
-            "email": u["email"],
-            "first": first_name,
-            "last": last_name,
-            "full": u["name"],
-            "pwd": pwd_hash
-        })
+        role = u["role"]
+        emp_id = u["employee_id"]
 
-        # Assign Role
-        role_id = f"{u['email']}-{u['role']}"
-        sql_role = """
-        INSERT INTO `tabHas Role` (`name`, `parent`, `role`)
-        VALUES (%(name)s, %(parent)s, %(role)s)
-        ON DUPLICATE KEY UPDATE `role` = VALUES(`role`);
-        """
-        cursor.execute(sql_role, {
-            "name": role_id,
-            "parent": u["email"],
-            "role": u["role"]
-        })
+        # 1. Create or update User
+        if not frappe.db.exists("User", email):
+            user = frappe.new_doc("User")
+            user.email = email
+            user.first_name = first_name
+            user.last_name = last_name
+            user.send_welcome_email = 0
+            user.flags.ignore_permissions = True
+            user.insert()
+        else:
+            user = frappe.get_doc("User", email)
 
-    conn.commit()
-    print("    -> Demo user accounts initialized with PBKDF2-SHA256 password hashes")
+        # 2. Add application role
+        if role not in frappe.get_roles(email):
+            user.add_roles(role)
 
+        # 3. Set password securely
+        try:
+            update_password(user=email, pwd=demo_password)
+        except Exception as e:
+            print(f"    Notice updating password for {email}: {e}")
 
-def seed_leave_applications(cursor, conn):
-    """Seeds approved leave applications to ensure leave calendars and balance summaries agree."""
-    cursor.execute("SELECT COUNT(*) FROM `tabLeave Application`;")
-    existing_count = cursor.fetchone()[0]
-    if existing_count >= 100:
-        return
+        # 4. Link demo Employee record
+        if not frappe.db.exists("Employee", emp_id):
+            emp = frappe.new_doc("Employee")
+            emp.name = emp_id
+            emp.employee_id = emp_id
+            emp.employee_name = u["name"]
+            emp.user_id = email
+            emp.department = u["department"]
+            emp.designation = u["designation"]
+            emp.manager = mgr_map.get(emp_id)
+            emp.date_of_joining = "2020-01-01"
+            emp.employment_status = "Active"
+            emp.shift = "General Shift"
+            emp.flags.ignore_permissions = True
+            emp.insert()
+        else:
+            frappe.db.set_value(
+                "Employee",
+                emp_id,
+                {
+                    "user_id": email,
+                    "manager": mgr_map.get(emp_id),
+                    "department": u["department"],
+                    "designation": u["designation"],
+                    "employment_status": "Active",
+                    "shift": "General Shift"
+                }
+            )
 
-    print("[*] Seeding approved Leave Applications for team leave calendars...")
-    from employee360.seed.generator import generate_employee_leave_applications
-    leaves = generate_employee_leave_applications()
-    for l in leaves:
-        sql = """
-        INSERT INTO `tabLeave Application` (
-            name, employee, leave_type, from_date, to_date, total_leave_days,
-            reason, status, approver, approval_comments, applied_at, decision_at
-        ) VALUES (
-            %(name)s, %(employee)s, %(leave_type)s, %(from_date)s, %(to_date)s, %(total_leave_days)s,
-            %(reason)s, %(status)s, %(approver)s, %(approval_comments)s, %(applied_at)s, %(decision_at)s
-        ) ON DUPLICATE KEY UPDATE status = VALUES(status);
-        """
-        cursor.execute(sql, l)
-    conn.commit()
-    print(f"    -> {len(leaves)} Leave Applications successfully seeded")
+    frappe.db.commit()
+    print("[+] Demo user accounts seeded and linked to Employee records.")
 
 
 def seed_employees(cursor, conn):
-    cursor.execute("SELECT COUNT(*) FROM `tabEmployee`;")
-    existing_count = cursor.fetchone()[0]
-    if existing_count >= SeedConfig.TOTAL_EMPLOYEES:
-        print(f"[*] Employees already seeded: {existing_count} records found.")
-        return
+    """
+    Seeds all employees with safe parameterized batch SQL.
+    """
+    employees = generate_all_employees(SeedConfig.TOTAL_EMPLOYEES)
+    total_emps = len(employees)
+    print(f"[*] Seeding {total_emps:,} Employee records...")
 
-    print(f"[*] Generating {SeedConfig.TOTAL_EMPLOYEES:,} employee records...")
-    t0 = time.time()
-    employees = generate_all_employees()
+    sql = """
+    INSERT INTO `tabEmployee` (
+        `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+        `employee_id`, `employee_name`, `user_id`, `manager`,
+        `department`, `designation`, `date_of_joining`, `employment_status`, `shift`
+    ) VALUES (
+        %s, NOW(), NOW(), 'Administrator', 'Administrator', 0,
+        %s, %s, %s, %s,
+        %s, %s, %s, %s, %s
+    ) ON DUPLICATE KEY UPDATE
+        `employee_name` = VALUES(`employee_name`),
+        `manager` = VALUES(`manager`),
+        `department` = VALUES(`department`),
+        `designation` = VALUES(`designation`),
+        `shift` = VALUES(`shift`);
+    """
 
     chunk_size = 2000
-    total = len(employees)
-    for i in range(0, total, chunk_size):
-        chunk = employees[i:i + chunk_size]
-        values_clause = []
-        for emp in chunk:
-            mgr_val = f"'{emp['manager']}'" if emp['manager'] else "NULL"
-            user_val = f"'{emp['user_id']}'" if emp['user_id'] else "NULL"
-            row_str = (
-                f"('{emp['name']}', '{emp['employee_id']}', "
-                f"'{pymysql.converters.escape_string(emp['employee_name'])}', "
-                f"{user_val}, {mgr_val}, '{emp['department']}', "
-                f"'{pymysql.converters.escape_string(emp['designation'])}', "
-                f"'{emp['date_of_joining']}', '{emp['employment_status']}', "
-                f"'{emp['shift']}')"
-            )
-            values_clause.append(row_str)
+    rows = [
+        (
+            e["name"],
+            e["employee_id"],
+            e["employee_name"],
+            e["user_id"],
+            e["manager"],
+            e["department"],
+            e["designation"],
+            e["date_of_joining"],
+            e["employment_status"],
+            e["shift"]
+        )
+        for e in employees
+    ]
 
-        sql = f"""
-        INSERT IGNORE INTO `tabEmployee` (
-            `name`, `employee_id`, `employee_name`, `user_id`, `manager`,
-            `department`, `designation`, `date_of_joining`, `employment_status`, `shift`
-        ) VALUES {', '.join(values_clause)};
-        """
-        cursor.execute(sql)
-        conn.commit()
-        inserted_so_far = min(i + chunk_size, total)
-        print(f"    -> Employees inserted: {inserted_so_far:,}/{total:,} ({inserted_so_far/total*100:.1f}%)", end="\r")
+    for i in range(0, len(rows), chunk_size):
+        cursor.executemany(sql, rows[i:i + chunk_size])
+    conn.commit()
+    print(f"[+] All {total_emps:,} Employee records committed successfully.")
 
-    t1 = time.time()
-    print(f"\n[+] Completed Employee seeding: {SeedConfig.TOTAL_EMPLOYEES:,} rows in {t1 - t0:.2f}s ({SeedConfig.TOTAL_EMPLOYEES / (t1 - t0):.1f} rows/s)")
+
+def seed_leave_applications(cursor, conn):
+    """
+    Seeds comprehensive Leave Applications across all employees using parameterized batch SQL.
+    Guarantees every 'On Leave' day has an approved leave application covering the date.
+    """
+    employees = generate_all_employees(SeedConfig.TOTAL_EMPLOYEES)
+    print(f"[*] Generating approved and historical Leave Applications for {len(employees):,} employees...")
+    all_leaves = generate_all_leave_applications(employees)
+    print(f"[*] Inserting {len(all_leaves):,} Leave Application records...")
+
+    sql = """
+    INSERT IGNORE INTO `tabLeave Application` (
+        `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+        `employee`, `leave_type`, `from_date`, `to_date`, `total_leave_days`,
+        `reason`, `status`, `approver`, `approval_comments`, `applied_at`, `decision_at`
+    ) VALUES (
+        %s, NOW(), NOW(), 'Administrator', 'Administrator', 0,
+        %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s
+    );
+    """
+
+    rows = [
+        (
+            l["name"],
+            l["employee"],
+            l["leave_type"],
+            l["from_date"],
+            l["to_date"],
+            l["total_leave_days"],
+            l["reason"],
+            l["status"],
+            l["approver"],
+            l["approval_comments"],
+            l["applied_at"],
+            l["decision_at"]
+        )
+        for l in all_leaves
+    ]
+
+    chunk_size = 2000
+    for i in range(0, len(rows), chunk_size):
+        cursor.executemany(sql, rows[i:i + chunk_size])
+    conn.commit()
+    print(f"[+] {len(all_leaves):,} Leave Application records committed successfully.")
 
 
 def drop_secondary_indexes(cursor, conn):
-    """Drops secondary indexes on tabEmployee Activity Log to maximize bulk insert speed."""
-    print("[*] Optimizing table: dropping nonessential secondary indexes before bulk insertion...")
-    indexes = ["idx_eal_emp_date", "idx_eal_date_emp", "idx_eal_status_date", "idx_eal_date_status"]
+    """Drops secondary non-unique indexes on tabEmployee Activity Log for high-speed bulk insertion."""
+    if SeedConfig.TOTAL_ACTIVITY_RECORDS < 100000:
+        return  # No need for small datasets
+
+    print("[*] Optimizing table: dropping secondary indexes for raw ingestion speed...")
+    t0 = time.time()
+    indexes = [
+        "idx_eal_emp_date",
+        "idx_eal_date_emp",
+        "idx_eal_status_date",
+        "idx_eal_date_status"
+    ]
     for idx in indexes:
         try:
             cursor.execute(f"ALTER TABLE `tabEmployee Activity Log` DROP INDEX `{idx}`;")
+            conn.commit()
         except Exception:
-            pass  # Index may not exist
-    conn.commit()
+            pass
+    print(f"[+] Dropped secondary indexes in {time.time() - t0:.2f}s")
 
 
 def recreate_secondary_indexes(cursor, conn):
-    """Rebuilds high-performance composite indexes in a single fast B-Tree pass."""
-    print("\n[*] Rebuilding composite secondary indexes on tabEmployee Activity Log (10,950,000 rows)...")
+    """Rebuilds secondary indexes post bulk insertion."""
+    if SeedConfig.TOTAL_ACTIVITY_RECORDS < 100000:
+        return
+
+    print("[*] Rebuilding secondary composite indexes on `tabEmployee Activity Log`...")
     t0 = time.time()
     indexes = [
         ("idx_eal_emp_date", "`employee`, `activity_date`"),
@@ -203,26 +327,47 @@ def recreate_secondary_indexes(cursor, conn):
     print(f"[+] All secondary indexes rebuilt in {time.time() - t0:.2f}s")
 
 
+def get_actual_activity_log_count(cursor) -> int:
+    cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log`;")
+    row = cursor.fetchone()
+    return row[0] if row else 0
+
+
 def get_or_create_checkpoint(cursor, conn) -> int:
+    """
+    Inspects checkpoint AND verifies with actual database COUNT query.
+    Prevents false completion declarations.
+    """
+    actual_count = get_actual_activity_log_count(cursor)
+
     cursor.execute("""
     SELECT `last_completed_batch`, `total_records_inserted`, `status`
     FROM `tabSeed Checkpoint`
     WHERE `seed_key` = 'attendance_seed';
     """)
     row = cursor.fetchone()
+
     if row:
-        last_batch, total_rec, status = row
-        if status == 'Completed' and total_rec >= SeedConfig.TOTAL_ACTIVITY_RECORDS:
-            return -1  # Already complete
-        return last_batch
+        last_batch, meta_rec, status = row
+        # Strictly verify with actual row count!
+        if status == 'Completed' and actual_count >= SeedConfig.TOTAL_ACTIVITY_RECORDS:
+            return -1  # Genuinely complete
+
+        # Calculate resume batch based on actual verified rows
+        resumed_batch = actual_count // SeedConfig.BATCH_SIZE
+        return resumed_batch
     else:
         cursor.execute("""
         INSERT INTO `tabSeed Checkpoint` (
-            `seed_key`, `last_completed_batch`, `total_records_inserted`, `target_records`, `status`
-        ) VALUES ('attendance_seed', 0, 0, %(target)s, 'Pending');
-        """, {"target": SeedConfig.TOTAL_ACTIVITY_RECORDS})
+            `name`, `seed_key`, `last_completed_batch`, `total_records_inserted`, `target_records`, `status`
+        ) VALUES ('attendance_seed', 'attendance_seed', 0, %(actual)s, %(target)s, 'Pending')
+        ON DUPLICATE KEY UPDATE `total_records_inserted` = %(actual)s;
+        """, {
+            "actual": actual_count,
+            "target": SeedConfig.TOTAL_ACTIVITY_RECORDS
+        })
         conn.commit()
-        return 0
+        return actual_count // SeedConfig.BATCH_SIZE
 
 
 def update_checkpoint(cursor, conn, batch_idx: int, records_inserted: int):
@@ -234,10 +379,9 @@ def update_checkpoint(cursor, conn, batch_idx: int, records_inserted: int):
         `updated_at` = NOW()
     WHERE `seed_key` = 'attendance_seed';
     """, {"batch": batch_idx, "inserted": records_inserted})
-    conn.commit()
 
 
-def mark_checkpoint_complete(cursor, conn):
+def mark_checkpoint_complete(cursor, conn, actual_count: int):
     cursor.execute("""
     UPDATE `tabSeed Checkpoint`
     SET `last_completed_batch` = %(batch)s,
@@ -246,8 +390,8 @@ def mark_checkpoint_complete(cursor, conn):
         `updated_at` = NOW()
     WHERE `seed_key` = 'attendance_seed';
     """, {
-        "batch": (SeedConfig.TOTAL_ACTIVITY_RECORDS + SeedConfig.BATCH_SIZE - 1) // SeedConfig.BATCH_SIZE,
-        "total": SeedConfig.TOTAL_ACTIVITY_RECORDS
+        "batch": (actual_count + SeedConfig.BATCH_SIZE - 1) // SeedConfig.BATCH_SIZE,
+        "total": actual_count
     })
     conn.commit()
 
@@ -259,6 +403,7 @@ def run_seed():
     print(f"Target Scale: {SeedConfig.TOTAL_EMPLOYEES:,} Employees | {SeedConfig.TOTAL_ACTIVITY_RECORDS:,} Activity Logs")
     print(f"Evaluation Window: {SeedConfig.START_DATE} to {SeedConfig.END_DATE} ({SeedConfig.DAYS_PER_EMPLOYEE} days)")
     print(f"Batch Size: {SeedConfig.BATCH_SIZE:,} | SQL Chunk: {SeedConfig.SQL_CHUNK_SIZE:,}")
+    print(f"Generate Raw Punches: {SeedConfig.GENERATE_RAW_PUNCHES}")
     print("=" * 80)
 
     tracemalloc.start()
@@ -268,69 +413,114 @@ def run_seed():
     cursor = conn.cursor()
 
     try:
+        # Ensure active_seconds is nullable
+        try:
+            cursor.execute("ALTER TABLE `tabEmployee Activity Log` MODIFY `active_seconds` INT NULL DEFAULT NULL;")
+            conn.commit()
+        except Exception:
+            pass
+
         # Step 1: Shifts & Employees
         seed_shifts(cursor)
         conn.commit()
         seed_employees(cursor, conn)
         seed_demo_users(cursor, conn)
+
+        # Step 2: Leave Applications (Must precede activity logs for consistency)
         seed_leave_applications(cursor, conn)
 
-        # Step 2: Checkpoint Inspection
+        # Step 3: Checkpoint & Actual Count Inspection
         last_batch = get_or_create_checkpoint(cursor, conn)
-        if last_batch == -1:
-            cursor.execute("SELECT COUNT(*) FROM `tabEmployee Activity Log`;")
-            cnt = cursor.fetchone()[0]
-            print(f"[+] Seeding already completed! Current count: {cnt:,} records.")
+        actual_count = get_actual_activity_log_count(cursor)
+
+        if last_batch == -1 or actual_count >= SeedConfig.TOTAL_ACTIVITY_RECORDS:
+            print(f"[+] Seeding already completed! Verified database count: {actual_count:,} records.")
             return
 
         if last_batch > 0:
-            print(f"[*] Resuming attendance seeding from batch {last_batch + 1}...")
+            print(f"[*] Resuming attendance seeding from batch {last_batch + 1} (already committed: {actual_count:,} records)...")
         else:
-            print("[*] Starting fresh attendance seeding for 10,950,000 records...")
+            print(f"[*] Starting fresh attendance seeding for {SeedConfig.TOTAL_ACTIVITY_RECORDS:,} records...")
 
-        # Step 3: Temporary index optimization
+        # Step 4: Temporary index optimization
         drop_secondary_indexes(cursor, conn)
 
-        # Step 4: Stream and insert batches
+        # Step 5: Safe Parameterized Stream and Batch Insert
         total_batches = (SeedConfig.TOTAL_ACTIVITY_RECORDS + SeedConfig.BATCH_SIZE - 1) // SeedConfig.BATCH_SIZE
-        records_so_far = last_batch * SeedConfig.BATCH_SIZE
+        records_so_far = actual_count
         t_start_logs = time.time()
-        last_log_time = t_start_logs
 
-        for batch_num, rows in stream_activity_log_batches(start_batch_idx=last_batch, batch_size=SeedConfig.BATCH_SIZE):
-            # Insert in SQL chunks of SQL_CHUNK_SIZE (e.g. 5,000 rows)
-            chunk_size = SeedConfig.SQL_CHUNK_SIZE
-            for i in range(0, len(rows), chunk_size):
-                sub_rows = rows[i:i + chunk_size]
-                formatted_values = []
-                for r in sub_rows:
-                    f_login = f"'{r[4]}'" if r[4] else "NULL"
-                    l_logout = f"'{r[5]}'" if r[5] else "NULL"
-                    val_str = (
-                        f"('{r[0]}', '{r[1]}', '{r[2]}', '{r[3]}', {f_login}, {l_logout}, "
-                        f"{r[6]}, {r[7]}, {r[8]}, '{r[9]}')"
-                    )
-                    formatted_values.append(val_str)
+        insert_log_sql = """
+        INSERT IGNORE INTO `tabEmployee Activity Log` (
+            `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+            `employee`, `activity_date`, `attendance_status`,
+            `first_login`, `last_logout`, `total_work_seconds`,
+            `active_seconds`, `total_sessions`, `calculated_at`,
+            `is_regularized`, `regularization_exception`, `is_synthetic`
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s
+        );
+        """
 
-                sql = f"""
-                INSERT IGNORE INTO `tabEmployee Activity Log` (
-                    `name`, `employee`, `activity_date`, `attendance_status`,
-                    `first_login`, `last_logout`, `total_work_seconds`,
-                    `active_seconds`, `total_sessions`, `calculated_at`
-                ) VALUES {', '.join(formatted_values)};
-                """
-                cursor.execute(sql)
+        insert_exc_sql = """
+        INSERT IGNORE INTO `tabAttendance Exception` (
+            `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+            `employee`, `activity_date`, `exception_type`, `status`,
+            `assigned_manager`, `description`, `original_status`
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s
+        );
+        """
 
-            conn.commit()
-            records_so_far += len(rows)
+        insert_punch_sql = """
+        INSERT IGNORE INTO `tabEmployee Checkin` (
+            `name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`,
+            `employee`, `time`, `log_type`, `source`,
+            `source_record_id`, `device_info`, `ip_address`, `gps_accuracy`
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s, %s
+        );
+        """
+
+        chunk_size = SeedConfig.SQL_CHUNK_SIZE
+
+        for batch_num, act_rows, exc_rows, punch_rows in stream_activity_log_batches(
+            start_batch_idx=last_batch,
+            batch_size=SeedConfig.BATCH_SIZE,
+            total_employees=SeedConfig.TOTAL_EMPLOYEES
+        ):
+            # 1. Parameterized insert for activity logs
+            for i in range(0, len(act_rows), chunk_size):
+                cursor.executemany(insert_log_sql, act_rows[i:i + chunk_size])
+
+            # 2. Parameterized insert for attendance exceptions (Missing Check-out)
+            if exc_rows:
+                for i in range(0, len(exc_rows), chunk_size):
+                    cursor.executemany(insert_exc_sql, exc_rows[i:i + chunk_size])
+
+            # 3. Parameterized insert for raw checkins if enabled
+            if punch_rows:
+                for i in range(0, len(punch_rows), chunk_size):
+                    cursor.executemany(insert_punch_sql, punch_rows[i:i + chunk_size])
+
+            records_so_far += len(act_rows)
             update_checkpoint(cursor, conn, batch_num, records_so_far)
+            conn.commit()
 
-            # Performance reporting every 10 batches (~250,000 records)
+            # Reporting
             if batch_num % 10 == 0 or records_so_far >= SeedConfig.TOTAL_ACTIVITY_RECORDS:
                 now_t = time.time()
                 elapsed_sec = now_t - t_start_logs
-                rate = (records_so_far - (last_batch * SeedConfig.BATCH_SIZE)) / elapsed_sec if elapsed_sec > 0 else 0
-                pct = (records_so_far / SeedConfig.TOTAL_ACTIVITY_RECORDS) * 100
+                rate = (records_so_far - actual_count) / elapsed_sec if elapsed_sec > 0 else 0
+                pct = min(100.0, (records_so_far / SeedConfig.TOTAL_ACTIVITY_RECORDS) * 100)
                 remaining_sec = (SeedConfig.TOTAL_ACTIVITY_RECORDS - records_so_far) / rate if rate > 0 else 0
                 print(
                     f"    [Batch {batch_num:>3}/{total_batches}] "
@@ -340,15 +530,16 @@ def run_seed():
                 )
 
         t_end_logs = time.time()
-        print(f"\n[+] Raw insertion of 10,950,000 records finished in {t_end_logs - t_start_logs:.1f}s")
+        print(f"\n[+] Raw insertion of activity records finished in {t_end_logs - t_start_logs:.1f}s")
 
-        # Step 5: Rebuild secondary indexes
+        # Step 6: Rebuild secondary indexes
         recreate_secondary_indexes(cursor, conn)
 
-        # Step 6: Mark checkpoint complete
-        mark_checkpoint_complete(cursor, conn)
+        # Step 7: Verify final actual count from DB and complete checkpoint
+        final_count = get_actual_activity_log_count(cursor)
+        mark_checkpoint_complete(cursor, conn, final_count)
 
-        # Step 7: Final Benchmark & Metrics
+        # Step 8: Final Benchmark & Metrics
         current_mem, peak_mem = tracemalloc.get_traced_memory()
         tracemalloc.stop()
         total_time = time.time() - start_total_time
@@ -356,7 +547,7 @@ def run_seed():
         cursor.execute("""
         SELECT table_name, round(((data_length + index_length) / 1024 / 1024), 2) `size_mb`
         FROM information_schema.TABLES 
-        WHERE table_schema = 'employee360' AND table_name = 'tabEmployee Activity Log';
+        WHERE table_schema = DATABASE() AND table_name = 'tabEmployee Activity Log';
         """)
         table_size = cursor.fetchone()
         size_mb = table_size[1] if table_size else "N/A"
@@ -365,7 +556,8 @@ def run_seed():
         print("SEED BENCHMARK REPORT")
         print("=" * 80)
         print(f"Total Seeding Duration:       {total_time:.1f} seconds ({total_time/60:.2f} minutes)")
-        print(f"Overall Throughput:           {SeedConfig.TOTAL_ACTIVITY_RECORDS / total_time:.1f} records/sec")
+        print(f"Verified Records Inserted:    {final_count:,}")
+        print(f"Overall Throughput:           {final_count / total_time:.1f} records/sec" if total_time > 0 else "N/A")
         print(f"Peak Process Memory:          {peak_mem / 1024 / 1024:.2f} MB")
         print(f"Database Table + Index Size:  {size_mb} MB")
         print("=" * 80)
@@ -377,6 +569,7 @@ def run_seed():
     finally:
         cursor.close()
         conn.close()
+
 
 if __name__ == "__main__":
     run_seed()
